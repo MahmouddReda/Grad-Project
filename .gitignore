@@ -1,0 +1,36 @@
+# ---------------------------------
+# 1. VISUAL STUDIO / .NET ARTIFACTS
+# ---------------------------------
+# Compiled files (Binaries)
+[Bb]in/
+[Oo]bj/
+*.exe
+*.dll
+*.pdb
+*.suo
+
+# User-specific VS files
+.vs/
+*.user
+
+# ---------------------------------
+# 2. NODE.JS DEPENDENCIES (for FE and BE)
+# ---------------------------------
+# Node modules folder at the root (if your backend is Node.js)
+/node_modules
+
+# Node modules folder specifically inside the Frontend project
+/FrontendProject/node_modules
+
+# Node modules folder specifically inside the Backend project
+/BackendProject/node_modules
+
+# ---------------------------------
+# 3. ENVIRONMENT/CONFIG FILES
+# ---------------------------------
+# Sensitive data like API keys
+.env
+.env.*
+
+# Logs
+npm-debug.log*

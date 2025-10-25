@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+    />
+    <title>VScan - Vulnerability Scanner</title>
+
+    <style>
+      body {
+        background: linear-gradient(
+          170deg,
+          rgba(245, 247, 255, 1) 0%,
+          rgba(255, 255, 255, 1) 100%
+        );
+      }
+
+      header {
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+
+      #homesignupform {
+        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.07);
+        border: 0 !important;
+      }
+
+      .hero-title {
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      }
+
+      .feature-icon {
+        width: 4rem;
+        height: 4rem;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background-color: var(--bs-primary-bg-subtle);
+        color: var(--bs-primary);
+        font-size: 2rem;
+        margin-bottom: 1rem;
+      }
+
+      .feature-col {
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+      }
+      .feature-col:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.1);
+      }
+    </style>
+  </head>
+
+  <body>
+    <header
+      class="d-flex flex-wrap align-items-center justify-content-center justify-content-md-between bg-white py-3 mb-4 border-bottom sticky-top"
+    >
+      <div class="col-md-3 mb-2 mb-md-0">
+        <a
+          href="/"
+          class="d-inline-flex link-body-emphasis text-decoration-none"
+        >
+          <span class="fs-4 fw-bold text-dark ms-3"
+            ><span class="text-primary">VS</span>can</span
+          >
+        </a>
+      </div>
+
+      <ul class="nav col-12 col-md-auto mb-2 justify-content-center mb-md-0">
+        <li>
+          <a href="index.html" class="nav-link px-2 link-dark active">Home</a>
+        </li>
+        <li>
+          <a href="services.html" class="nav-link px-2 link-dark">Services</a>
+        </li>
+        <li>
+          <a href="pricing.html" class="nav-link px-2 link-dark">Plans</a>
+        </li>
+        <li><a href="faqs.html" class="nav-link px-2 link-dark">FAQs</a></li>
+        <li>
+          <a href="about.html" class="nav-link px-2 link-dark">About Us</a>
+        </li>
+      </ul>
+
+      <div class="col-md-3 text-end me-3" id="auth-container">
+        <button
+          type="button"
+          class="btn btn-primary me-2"
+          onclick="window.location.href = 'login.html';"
+        >
+          Login
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          onclick="window.location.href = 'signin.html';"
+        >
+          Sign-up
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <div class="container col-xxl-8 px-4 py-5">
+        <div class="row flex-lg-row-reverse align-items-center g-5 py-5">
+          <div class="col-md-10 mx-auto col-lg-5">
+            <form
+              id="homesignupform"
+              class="p-4 p-md-5 border rounded-3 bg-body-tertiary"
+            >
+              <h3 class="fw-bold text-center mb-3">Get Started for Free</h3>
+              <div class="row g-2 mb-3">
+                <div class="col-sm-6">
+                  <div class="form-floating">
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="floatingFirstname"
+                      placeholder="First Name"
+                    />
+                    <label for="floatingFirstname">First Name</label>
+                  </div>
+                </div>
+
+                <div class="col-sm-6">
+                  <div class="form-floating">
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="floatingLastname"
+                      placeholder="Last Name"
+                    />
+                    <label for="floatingLastname">Last Name</label>
+                  </div>
+                </div>
+              </div>
+              <div class="form-floating mb-3">
+                <input
+                  type="email"
+                  class="form-control"
+                  id="floatingInput"
+                  placeholder="name@example.com"
+                />
+                <label for="floatingInput">Email address</label>
+              </div>
+
+              <div class="checkbox mb-3">
+                <label>
+                  <input type="checkbox" value="remember-me" /> Remember me
+                </label>
+              </div>
+              <button class="w-100 btn btn-lg btn-primary" type="submit">
+                Start Free Scan
+              </button>
+              <hr class="my-4" />
+              <small class="text-body-secondary"
+                >By clicking Sign up, you agree to the terms of use.</small
+              >
+            </form>
+          </div>
+          <div class="col-lg-7 text-center text-lg-start">
+            <h1
+              class="display-4 fw-bold lh-1 text-body-emphasis mb-3 hero-title"
+            >
+              Secure Your Web Applications Instantly
+            </h1>
+            <p class="col-lg-10 fs-4">
+              VScan is your all-in-one solution to identify, track, and
+              remediate vulnerabilities. Sign up to get your first report in
+              minutes.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="container px-4 py-5" id="how-it-works">
+        <h2 class="pb-2 border-bottom text-center fw-bold">How VScan Works</h2>
+        <div class="row g-4 py-5 row-cols-1 row-cols-lg-3">
+          <div
+            class="col d-flex flex-column align-items-center text-center feature-col"
+          >
+            <div class="feature-icon">
+              <i class="bi bi-person-plus-fill"></i>
+            </div>
+            <h3 class="fw-bold mb-2 fs-4">1. Create Account</h3>
+            <p class="text-body-secondary">
+              Sign up for a free account in seconds. No credit card required to
+              get started.
+            </p>
+          </div>
+          <div
+            class="col d-flex flex-column align-items-center text-center feature-col"
+          >
+            <div class="feature-icon">
+              <i class="bi bi-shield-check"></i>
+            </div>
+            <h3 class="fw-bold mb-2 fs-4">2. Run Your Scan</h3>
+            <p class="text-body-secondary">
+              Enter your web application's URL and let our powerful engine scan
+              for thousands of known vulnerabilities.
+            </p>
+          </div>
+          <div
+            class="col d-flex flex-column align-items-center text-center feature-col"
+          >
+            <div class="feature-icon">
+              <i class="bi bi-clipboard-data-fill"></i>
+            </div>
+            <h3 class_content="fw-bold mb-2 fs-4">3. Get Your Report</h3>
+            <p class="text-body-secondary">
+              Receive a comprehensive, easy-to-understand report detailing all
+              findings and actionable steps.
+            </p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="py-4 my-4 bg-body-tertiary">
+      <ul class="nav justify-content-center border-bottom pb-3 mb-3">
+        <li class="nav-item">
+          <a href="index.html" class="nav-link px-2 text-body-secondary"
+            >Home</a
+          >
+        </li>
+        <li class="nav-item">
+          <a href="services.html" class="nav-link px-2 text-body-secondary"
+            >Services</a
+          >
+        </li>
+        <li class="nav-item">
+          <a href="pricing.html" class="nav-link px-2 text-body-secondary"
+            >Plans</a
+          >
+        </li>
+        <li class="nav-item">
+          <a href="faqs.html" class="nav-link px-2 text-body-secondary">FAQs</a>
+        </li>
+        <li class="nav-item">
+          <a href="about.html" class="nav-link px-2 text-body-secondary"
+            >About Us</a
+          >
+        </li>
+      </ul>
+      <p class="text-center text-body-secondary">© 2025 Company, Inc</p>
+    </footer>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q"
+      crossorigin="anonymous"
+    ></script>
+
+    <script>
+      document
+        .getElementById("homesignupform")
+        .addEventListener("submit", function (event) {
+          event.preventDefault();
+          const firstName = document.getElementById("floatingFirstname").value;
+          const lastName = document.getElementById("floatingLastname").value;
+          const email = document.getElementById("floatingInput").value;
+
+          const signinUrl = `signin.html?firstname=${encodeURIComponent(
+            firstName
+          )}&lastname=${encodeURIComponent(
+            lastName
+          )}&email=${encodeURIComponent(email)}`;
+          window.location.href = signinUrl;
+        });
+    </script>
+    <script src="auth.js"></script>
+  </body>
+</html>

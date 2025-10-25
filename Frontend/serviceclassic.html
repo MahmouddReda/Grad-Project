@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr"
+      crossorigin="anonymous"
+    />
+    <title>Vulnerability Scanner</title>
+  </head>
+
+  <body>
+    <header
+      class="d-flex flex-wrap align-items-center justify-content-center bg-dark py-3 mb-4 border-bottom"
+    >
+      <div class="col-md-3 mb-2 mb-md-0">
+        <a
+          href="/"
+          class="d-inline-flex link-body-emphasis text-decoration-none"
+        >
+          <svg
+            class="bi"
+            width="40"
+            height="32"
+            role="img"
+            aria-label="Bootstrap"
+          >
+            <use xlink:href="#bootstrap"></use>
+          </svg>
+        </a>
+      </div>
+      <ul class="nav col-12 col-md-auto mb-2 justify-content-center mb-md-0">
+        <li>
+          <a href="index.html" class="nav-link px-2 link-light">Home</a>
+        </li>
+        <li>
+          <a href="services.html" class="nav-link px-2 link-secondary"
+            >Services</a
+          >
+        </li>
+        <li>
+          <a href="pricing.html" class="nav-link px-2 link-light">Plans</a>
+        </li>
+        <li><a href="faqs.html" class="nav-link px-2 link-light">FAQs</a></li>
+        <li>
+          <a href="about.html" class="nav-link px-2 link-light">About Us</a>
+        </li>
+      </ul>
+      <div class="col-md-3 text-end" id="auth-container">
+        <button type="button" class="btn btn-outline-light me-2">Login</button>
+        <button
+          type="button"
+          class="btn btn-light"
+          onclick="window.location.href = 'signin.html';"
+        >
+          Sign-up
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <div class="container text-center">
+        <div class="pricing-header col-8 p-3 pb-md-4 mx-auto text-center">
+          <h1 class="display-4 fw-normal text-body-emphasis">Scan Now</h1>
+          <p class="fs-5 text-body-secondary">
+            Enter a website URL to check for vulnerabilities.
+          </p>
+        </div>
+      </div>
+      <div class="container text-center">
+        <form id="scan-form" class="d-flex justify-content-center gap-2 mt-4">
+          <input
+            type="text"
+            class="form-control w-50"
+            id="website-url"
+            placeholder="https://example.com"
+            required
+          />
+          <button type="submit" class="btn btn-dark">Check Now</button>
+        </form>
+      </div>
+
+      <div class="container col-8 mx-auto mt-5" id="results-container"></div>
+    </main>
+    <footer class="py-3 my-4">
+      <ul class="nav justify-content-center border-bottom pb-3 mb-3">
+        <li class="nav-item">
+          <a href="Index.html" class="nav-link px-2 text-body-secondary"
+            >Home</a
+          >
+        </li>
+        <li class="nav-item">
+          <a href="services.html" class="nav-link px-2 text-body-secondary"
+            >Features</a
+          >
+        </li>
+        <li class="nav-item">
+          <a href="Pricing.html" class="nav-link px-2 text-body-secondary"
+            >Pricing</a
+          >
+        </li>
+        <li class="nav-item">
+          <a href="FAQs.html" class="nav-link px-2 text-body-secondary">FAQs</a>
+        </li>
+        <li class="nav-item">
+          <a href="About.html" class="nav-link px-2 text-body-secondary"
+            >About</a
+          >
+        </li>
+      </ul>
+      <p class="text-center text-body-secondary">© 2025 Company, Inc</p>
+    </footer>
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q"
+      crossorigin="anonymous"
+    ></script>
+    <script src="auth.js"></script>
+    <script src="scan.js"></script>
+  </body>
+</html>

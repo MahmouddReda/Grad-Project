@@ -1,0 +1,43 @@
+body {
+        background: linear-gradient(
+          170deg,
+          rgba(245, 247, 255, 1) 0%,
+          rgba(255, 255, 255, 1) 100%
+        );
+      }
+
+      header {
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+
+      #homesignupform {
+        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.07);
+        border: 0 !important;
+      }
+
+      .hero-title {
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      }
+
+      .feature-icon {
+        width: 4rem;
+        height: 4rem;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background-color: var(--bs-dark-bg-subtle);
+        color: var(--bs-dark);
+        font-size: 2rem;
+        margin-bottom: 1rem;
+      }
+
+      .feature-col {
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+      }
+      .feature-col:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.1);
+      }

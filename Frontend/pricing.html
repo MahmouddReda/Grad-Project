@@ -8,99 +8,49 @@
       integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr"
       crossorigin="anonymous"
     />
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
-    />
-    <title>VScan - Plans</title> <style>
-      body {
-        background: linear-gradient(
-          170deg,
-          rgba(245, 247, 255, 1) 0%,
-          rgba(255, 255, 255, 1) 100%
-        );
-      }
-
-      header {
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-      }
-
-      #homesignupform {
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.07);
-        border: 0 !important;
-      }
-
-      .hero-title {
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-      }
-
-      .feature-icon {
-        width: 4rem;
-        height: 4rem;
-        border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background-color: var(--bs-primary-bg-subtle);
-        color: var(--bs-primary);
-        font-size: 2rem;
-        margin-bottom: 1rem;
-      }
-
-      .feature-col {
-        padding: 1.5rem;
-        border-radius: 0.5rem;
-        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-      }
-      .feature-col:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.1);
-      }
-    </style>
+    <title>Vulnerability Scanner</title>
   </head>
 
   <body>
     <header
-      class="d-flex flex-wrap align-items-center justify-content-center justify-content-md-between bg-white py-3 mb-4 border-bottom sticky-top"
+      class="d-flex flex-wrap align-items-center justify-content-center bg-dark py-3 mb-4 border-bottom"
     >
       <div class="col-md-3 mb-2 mb-md-0">
         <a
           href="/"
           class="d-inline-flex link-body-emphasis text-decoration-none"
         >
-          <span class="fs-4 fw-bold text-dark ms-3"
-            ><span class="text-primary">VS</span>can</span
+          <span class="fs-4 fw-bold text-secondary ms-3"
+            ><span class="text-light">VS</span>can</span
           >
         </a>
       </div>
-
       <ul class="nav col-12 col-md-auto mb-2 justify-content-center mb-md-0">
         <li>
-          <a href="index.html" class="nav-link px-2 link-dark">Home</a>
+          <a href="index.html" class="nav-link px-2 link-light">Home</a>
         </li>
         <li>
-          <a href="services.html" class="nav-link px-2 link-dark">Services</a>
+          <a href="services.html" class="nav-link px-2 link-light">Services</a>
         </li>
         <li>
-          <a href="pricing.html" class="nav-link px-2 link-dark active">Plans</a>
+          <a href="pricing.html" class="nav-link px-2 link-secondary">Plans</a>
         </li>
-        <li><a href="faqs.html" class="nav-link px-2 link-dark">FAQs</a></li>
+        <li><a href="faqs.html" class="nav-link px-2 link-light">FAQs</a></li>
         <li>
-          <a href="about.html" class="nav-link px-2 link-dark">About Us</a>
+          <a href="about.html" class="nav-link px-2 link-light">About Us</a>
         </li>
       </ul>
-
-      <div class="col-md-3 text-end me-3" id="auth-container">
+      <div class="col-md-3 text-end" id="auth-container">
         <button
           type="button"
-          class="btn btn-info me-2"
+          class="btn btn-outline-light me-2"
           onclick="window.location.href = 'login.html';"
         >
           Login
         </button>
         <button
           type="button"
-          class="btn btn-primary"
+          class="btn btn-light"
           onclick="window.location.href = 'signin.html';"
         >
           Sign-up
@@ -110,20 +60,21 @@
 
     <main>
       <div class="container text-center">
-        <div class="pricing-header col-lg-8 p-3 pb-md-4 mx-auto text-center">
-          <h1 class="display-4 fw-bold text-body-emphasis hero-title">Plans</h1>
+        <div class="pricing-header col-8 p-3 pb-md-4 mx-auto text-center">
+          <h1 class="display-4 fw-normal text-body-emphasis">Plans</h1>
           <p class="fs-5 text-body-secondary">
-            Choose the plan that's right for you. From a single free scan to
-            enterprise-level continuous monitoring, we've got you covered.
+            Quickly build an effective pricing table for your potential
+            customers with this Bootstrap example. It’s built with default
+            Bootstrap components and utilities with little customization.
           </p>
         </div>
       </div>
-      <div class="container text-center col-lg-9 p-3 pb-md-4 mx-auto">
+      <div class="container text-center col-8 p-3 pb-md-4 mx-auto">
         <div class="row row-cols-1 row-cols-md-3 mb-3 text-center">
           <div class="col">
-            <div class="card mb-4 rounded-3 shadow-sm feature-col">
-              <div class="card-header py-3 bg-transparent border-0">
-                <h4 class="my-0 fw-bold text-primary">Free</h4>
+            <div class="card mb-4 rounded-3 shadow-sm">
+              <div class="card-header py-3">
+                <h4 class="my-0 fw-normal">Free</h4>
               </div>
               <div class="card-body">
                 <h1 class="card-title pricing-card-title">
@@ -136,9 +87,9 @@
                   <li>Help center access</li>
                 </ul>
                 <button
-                  type_button"
+                  type="button"
                   onclick="window.location.href = 'signin.html';"
-                  class="w-100 btn btn-lg btn-outline-primary"
+                  class="w-100 btn btn-lg btn-outline-dark"
                 >
                   Sign up for free
                 </button>
@@ -146,9 +97,9 @@
             </div>
           </div>
           <div class="col">
-            <div class="card mb-4 rounded-3 shadow-sm feature-col">
-              <div class="card-header py-3 bg-transparent border-0">
-                <h4 class="my-0 fw-bold text-primary">Personal</h4>
+            <div class="card mb-4 rounded-3 shadow-sm">
+              <div class="card-header py-3">
+                <h4 class="my-0 fw-normal">Personal</h4>
               </div>
               <div class="card-body">
                 <h1 class="card-title pricing-card-title">
@@ -160,20 +111,20 @@
                   <li>Priority email support</li>
                   <li>Help center access</li>
                 </ul>
-                <button type="button" class="w-100 btn btn-lg btn-primary">
+                <button type="button" class="w-100 btn btn-lg btn-dark">
                   Get started
                 </button>
               </div>
             </div>
           </div>
           <div class="col">
-            <div class="card mb-4 rounded-3 shadow-sm feature-col">
-              <div class="card-header py-3 bg-transparent border-0">
-                <h4 class="my-0 fw-bold text-primary">Business</h4>
+            <div class="card mb-4 rounded-3 shadow-sm border-dark">
+              <div class="card-header py-3 text-bg-dark border-dark">
+                <h4 class="my-0 fw-normal">Business</h4>
               </div>
               <div class="card-body">
                 <h1 class="card-title pricing-card-title">
-                  $29+<small class_content="text-body-secondary fw-light">/mo</small>
+                  $29+<small class="text-body-secondary fw-light">/mo</small>
                 </h1>
                 <ul class="list-unstyled mt-3 mb-4">
                   <li>For Business use</li>
@@ -181,17 +132,16 @@
                   <li>Phone and email support</li>
                   <li>Help center access</li>
                 </ul>
-                <button type="button" class="w-100 btn btn-lg btn-primary">
+                <button type="button" class="w-100 btn btn-lg btn-dark">
                   Get started
                 </button>
               </div>
             </div>
           </div>
         </div>
-
         <h2 class="display-6 text-center mb-4">Compare plans</h2>
         <div class="table-responsive">
-          <table class="table text-center align-middle">
+          <table class="table text-center">
             <thead>
               <tr>
                 <th style="width: 34%"></th>
@@ -203,57 +153,164 @@
             <tbody>
               <tr>
                 <th scope="row" class="text-start">Multiple users</th>
-                <td></td>
-                <td></td>
                 <td>
-                  <i class="bi bi-check-lg text-primary fs-4"></i>
+                  <svg
+                    class="bi"
+                    width="24"
+                    height="24"
+                    role="img"
+                    aria-label="Included"
+                  >
+                    <use xlink:href=""></use>
+                  </svg>
+                </td>
+                <td>
+                  <svg
+                    class="bi"
+                    width="24"
+                    height="24"
+                    role="img"
+                    aria-label="Included"
+                  >
+                    <use xlink:href=""></use>
+                  </svg>
+                </td>
+                <td>
+                  <svg
+                    class="bi"
+                    width="24"
+                    height="24"
+                    role="img"
+                    aria-label="Included"
+                  >
+                    <use xlink:href="check.svg"></use>
+                  </svg>
                 </td>
               </tr>
               <tr>
-                <th scope="row" class="text-start">Private scanning</th>
+                <th scope="row" class="text-start">Private</th>
                 <td>
-                  <i class="bi bi-check-lg text-primary fs-4"></i>
+                  <svg
+                    class="bi"
+                    width="24"
+                    height="24"
+                    role="img"
+                    aria-label="Included"
+                  >
+                    <use xlink:href="check.svg"></use>
+                  </svg>
                 </td>
                 <td>
-                  <i class="bi bi-check-lg text-primary fs-4"></i>
+                  <svg
+                    class="bi"
+                    width="24"
+                    height="24"
+                    role="img"
+                    aria-label="Included"
+                  >
+                    <use xlink:href="check.svg"></use>
+                  </svg>
                 </td>
                 <td>
-                  <i class="bi bi-check-lg text-primary fs-4"></i>
+                  <svg
+                    class="bi"
+                    width="24"
+                    height="24"
+                    role="img"
+                    aria-label="Included"
+                  >
+                    <use xlink:href="check.svg"></use>
+                  </svg>
                 </td>
               </tr>
             </tbody>
-
             <tbody>
               <tr>
                 <th scope="row" class="text-start">Permissions</th>
                 <td>
-                  <i class="bi bi-check-lg text-primary fs-4"></i>
+                  <svg
+                    class="bi"
+                    width="24"
+                    height="24"
+                    role="img"
+                    aria-label="Included"
+                  >
+                    <use xlink:href="check.svg"></use>
+                  </svg>
                 </td>
                 <td>
-                  <i class="bi bi-check-lg text-primary fs-4"></i>
+                  <svg
+                    class="bi"
+                    width="24"
+                    height="24"
+                    role="img"
+                    aria-label="Included"
+                  >
+                    <use xlink:href="check.svg"></use>
+                  </svg>
                 </td>
                 <td>
-                  <i class="bi bi-check-lg text-primary fs-4"></i>
+                  <svg
+                    class="bi"
+                    width="24"
+                    height="24"
+                    role="img"
+                    aria-label="Included"
+                  >
+                    <use xlink:href="check.svg"></use>
+                  </svg>
                 </td>
               </tr>
               <tr>
-                <th scope="row" class="text-start">Sharing reports</th>
+                <th scope="row" class="text-start">Sharing</th>
                 <td></td>
                 <td>
-                  <i class="bi bi-check-lg text-primary fs-4"></i>
+                  <svg
+                    class="bi"
+                    width="24"
+                    height="24"
+                    role="img"
+                    aria-label="Included"
+                  >
+                    <use xlink:href="check.svg"></use>
+                  </svg>
                 </td>
                 <td>
-                  <i class="bi bi-check-lg text-primary fs-4"></i>
+                  <svg
+                    class="bi"
+                    width="24"
+                    height="24"
+                    role="img"
+                    aria-label="Included"
+                  >
+                    <use xlink:href="check.svg"></use>
+                  </svg>
                 </td>
               </tr>
               <tr>
                 <th scope="row" class="text-start">Unlimited members</th>
                 <td></td>
                 <td>
-                  <i class="bi bi-check-lg text-primary fs-4"></i>
+                  <svg
+                    class="bi"
+                    width="24"
+                    height="24"
+                    role="img"
+                    aria-label="Included"
+                  >
+                    <use xlink:href="check.svg"></use>
+                  </svg>
                 </td>
                 <td>
-                  <i class="bi bi-check-lg text-primary fs-4"></i>
+                  <svg
+                    class="bi"
+                    width="24"
+                    height="24"
+                    role="img"
+                    aria-label="Included"
+                  >
+                    <use xlink:href="check.svg"></use>
+                  </svg>
                 </td>
               </tr>
               <tr>
@@ -261,7 +318,15 @@
                 <td></td>
                 <td></td>
                 <td>
-                  <i class="bi bi-check-lg text-primary fs-4"></i>
+                  <svg
+                    class="bi"
+                    width="24"
+                    height="24"
+                    role="img"
+                    aria-label="Included"
+                  >
+                    <use xlink:href="check.svg"></use>
+                  </svg>
                 </td>
               </tr>
             </tbody>
@@ -269,30 +334,29 @@
         </div>
       </div>
     </main>
-
-    <footer class="py-4 my-4 bg-body-tertiary">
+    <footer class="py-3 my-4">
       <ul class="nav justify-content-center border-bottom pb-3 mb-3">
         <li class="nav-item">
-          <a href="index.html" class="nav-link px-2 text-body-secondary"
+          <a href="Index.html" class="nav-link px-2 text-body-secondary"
             >Home</a
           >
         </li>
         <li class="nav-item">
           <a href="services.html" class="nav-link px-2 text-body-secondary"
-            >Services</a
+            >Features</a
           >
         </li>
         <li class="nav-item">
-          <a href="pricing.html" class="nav-link px-2 text-body-secondary"
-            >Plans</a
+          <a href="Pricing.html" class="nav-link px-2 text-body-secondary"
+            >Pricing</a
           >
         </li>
         <li class="nav-item">
-          <a href="faqs.html" class="nav-link px-2 text-body-secondary">FAQs</a>
+          <a href="FAQs.html" class="nav-link px-2 text-body-secondary">FAQs</a>
         </li>
         <li class="nav-item">
-          <a href="about.html" class="nav-link px-2 text-body-secondary"
-            >About Us</a
+          <a href="About.html" class="nav-link px-2 text-body-secondary"
+            >About</a
           >
         </li>
       </ul>

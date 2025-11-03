@@ -8,101 +8,54 @@
       integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr"
       crossorigin="anonymous"
     />
+    <link href="index.css" rel="stylesheet" />
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
     />
     <title>VScan - Vulnerability Scanner</title>
-
-    <style>
-      body {
-        background: linear-gradient(
-          170deg,
-          rgba(245, 247, 255, 1) 0%,
-          rgba(255, 255, 255, 1) 100%
-        );
-      }
-
-      header {
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-      }
-
-      #homesignupform {
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.07);
-        border: 0 !important;
-      }
-
-      .hero-title {
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-      }
-
-      .feature-icon {
-        width: 4rem;
-        height: 4rem;
-        border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background-color: var(--bs-primary-bg-subtle);
-        color: var(--bs-primary);
-        font-size: 2rem;
-        margin-bottom: 1rem;
-      }
-
-      .feature-col {
-        padding: 1.5rem;
-        border-radius: 0.5rem;
-        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-      }
-      .feature-col:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.1);
-      }
-    </style>
   </head>
 
   <body>
     <header
-      class="d-flex flex-wrap align-items-center justify-content-center justify-content-md-between bg-white py-3 mb-4 border-bottom sticky-top"
+      class="d-flex flex-wrap align-items-center justify-content-center bg-dark py-3 mb-4 border-bottom"
     >
       <div class="col-md-3 mb-2 mb-md-0">
         <a
           href="/"
           class="d-inline-flex link-body-emphasis text-decoration-none"
         >
-          <span class="fs-4 fw-bold text-dark ms-3"
-            ><span class="text-primary">VS</span>can</span
+          <span class="fs-4 fw-bold text-secondary ms-3"
+            ><span class="text-light">VS</span>can</span
           >
         </a>
       </div>
-
       <ul class="nav col-12 col-md-auto mb-2 justify-content-center mb-md-0">
         <li>
-          <a href="index.html" class="nav-link px-2 link-dark active">Home</a>
+          <a href="index.html" class="nav-link px-2 link-secondary">Home</a>
         </li>
         <li>
-          <a href="services.html" class="nav-link px-2 link-dark">Services</a>
+          <a href="services.html" class="nav-link px-2 link-light">Services</a>
         </li>
         <li>
-          <a href="pricing.html" class="nav-link px-2 link-dark">Plans</a>
+          <a href="pricing.html" class="nav-link px-2 link-light">Plans</a>
         </li>
-        <li><a href="faqs.html" class="nav-link px-2 link-dark">FAQs</a></li>
+        <li><a href="faqs.html" class="nav-link px-2 link-light">FAQs</a></li>
         <li>
-          <a href="about.html" class="nav-link px-2 link-dark">About Us</a>
+          <a href="about.html" class="nav-link px-2 link-light">About Us</a>
         </li>
       </ul>
-
-      <div class="col-md-3 text-end me-3" id="auth-container">
+      <div class="col-md-3 text-end" id="auth-container">
         <button
           type="button"
-          class="btn btn-primary me-2"
+          class="btn btn-outline-light me-2"
           onclick="window.location.href = 'login.html';"
         >
           Login
         </button>
         <button
           type="button"
-          class="btn btn-primary"
+          class="btn btn-light"
           onclick="window.location.href = 'signin.html';"
         >
           Sign-up
@@ -111,8 +64,10 @@
     </header>
 
     <main>
-      <div class="container col-xxl-8 px-4 py-5">
-        <div class="row flex-lg-row-reverse align-items-center g-5 py-5">
+      <div id="homepage-signup-block" class="container col-xxl-8 px-4 py-5">
+        <div
+          class="row flex-lg-row-reverse border-bottom align-items-center g-5 py-5"
+        >
           <div class="col-md-10 mx-auto col-lg-5">
             <form
               id="homesignupform"
@@ -159,9 +114,14 @@
                   <input type="checkbox" value="remember-me" /> Remember me
                 </label>
               </div>
-              <button class="w-100 btn btn-lg btn-primary" type="submit">
+              <button class="w-100 btn btn-lg btn-dark" type="submit">
                 Start Free Scan
               </button>
+              <label class="d-block text-center mt-3">
+                Already have an account?
+                <a class="link-secondary" href="login.html">Login</a>
+              </label>
+
               <hr class="my-4" />
               <small class="text-body-secondary"
                 >By clicking Sign up, you agree to the terms of use.</small
@@ -183,8 +143,49 @@
         </div>
       </div>
 
+      <!-- Homepage login block -->
+      <div
+        id="homepage-loggedin-block"
+        class="container col-xxl-8 px-4 py-5"
+        style="display: none"
+      >
+        <div class="">
+          <div class="col-lg-12 mx-auto mb-5">
+            <h2 class="fw-semibold fst-italic mb-4">
+              Welcome Back, <span id="user-firstname">[Name]</span>!
+            </h2>
+          </div>
+        </div>
+        <div
+          class="d-flex flex-row text-center border-bottom text-lg-start mt-5 pb-5"
+        >
+          <div class="col-lg-7">
+            <h1
+              class="display-4 fw-bold lh-1 text-body-emphasis mb-3 hero-title"
+            >
+              Continue Securing Your Web Applications
+            </h1>
+            <p class="col-lg-10 fs-4">
+              Use the scanner to manage scans, view reports, and monitor your
+              web application's security status.
+              <!-- Adjusted text slightly -->
+            </p>
+          </div>
+          <div class="col-lg-2"></div>
+          <div class="col-lg-3 d-flex justify-content-end align-items-center">
+            <button
+              class="w-100 btn btn-lg btn-dark"
+              type="button"
+              onclick="window.location.href = 'serviceclassic.html';"
+            >
+              Go to Scanner
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="container px-4 py-5" id="how-it-works">
-        <h2 class="pb-2 border-bottom text-center fw-bold">How VScan Works</h2>
+        <h2 class="pb-2 text-center fw-bold">How VScan Works</h2>
         <div class="row g-4 py-5 row-cols-1 row-cols-lg-3">
           <div
             class="col d-flex flex-column align-items-center text-center feature-col"
@@ -225,30 +226,29 @@
         </div>
       </div>
     </main>
-
-    <footer class="py-4 my-4 bg-body-tertiary">
+    <footer class="py-3 my-4">
       <ul class="nav justify-content-center border-bottom pb-3 mb-3">
         <li class="nav-item">
-          <a href="index.html" class="nav-link px-2 text-body-secondary"
+          <a href="Index.html" class="nav-link px-2 text-body-secondary"
             >Home</a
           >
         </li>
         <li class="nav-item">
           <a href="services.html" class="nav-link px-2 text-body-secondary"
-            >Services</a
+            >Features</a
           >
         </li>
         <li class="nav-item">
-          <a href="pricing.html" class="nav-link px-2 text-body-secondary"
-            >Plans</a
+          <a href="Pricing.html" class="nav-link px-2 text-body-secondary"
+            >Pricing</a
           >
         </li>
         <li class="nav-item">
-          <a href="faqs.html" class="nav-link px-2 text-body-secondary">FAQs</a>
+          <a href="FAQs.html" class="nav-link px-2 text-body-secondary">FAQs</a>
         </li>
         <li class="nav-item">
-          <a href="about.html" class="nav-link px-2 text-body-secondary"
-            >About Us</a
+          <a href="About.html" class="nav-link px-2 text-body-secondary"
+            >About</a
           >
         </li>
       </ul>

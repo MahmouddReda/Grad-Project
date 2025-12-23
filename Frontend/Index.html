@@ -14,10 +14,23 @@
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
     />
     <title>VScan - Vulnerability Scanner</title>
+    <style>
+      nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        z-index: 999;
+      }
+      body {
+        padding-top: 70px;
+      }
+    </style>
   </head>
 
   <body>
     <header
+      id="topHeader"
       class="d-flex flex-wrap align-items-center justify-content-center bg-dark py-3 mb-4 border-bottom"
     >
       <div class="col-md-3 mb-2 mb-md-0">
@@ -275,6 +288,48 @@
           )}&email=${encodeURIComponent(email)}`;
           window.location.href = signinUrl;
         });
+      const topHeader = document.getElementById("topHeader");
+
+      topHeader.style.position = "fixed";
+      topHeader.style.top = "0px";
+      topHeader.style.left = "0";
+      topHeader.style.width = "100%";
+      topHeader.style.transition = "top 0.3s";
+
+      let hideTimer = null;
+
+      function hideHeader() {
+        if (window.scrollY > 0) {
+          topHeader.style.top = "-120px";
+        }
+      }
+
+      function showHeader() {
+        topHeader.style.top = "0px";
+      }
+
+      // scroll = hide (unless at top)
+      window.addEventListener("scroll", () => {
+        if (window.scrollY === 0) {
+          showHeader();
+        } else {
+          hideHeader();
+        }
+      });
+
+      // mouse detection
+      document.addEventListener("mousemove", (e) => {
+        if (e.clientY < 40) {
+          // top 40px area
+          showHeader();
+          if (hideTimer) clearTimeout(hideTimer);
+        } else {
+          if (window.scrollY > 0) {
+            if (hideTimer) clearTimeout(hideTimer);
+            hideTimer = setTimeout(hideHeader, 800); // 2 sec delay
+          }
+        }
+      });
     </script>
     <script src="auth.js"></script>
   </body>

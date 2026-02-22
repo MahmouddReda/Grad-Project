@@ -1,0 +1,312 @@
+import base64
+import json
+import datetime
+
+HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XSS Scan Report - {{TARGET_URL}}</title>
+    <style>
+        :root { --sidebar-width: 350px; --header-height: 60px; --primary: #007bff; --bg: #f8f9fa; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; background: var(--bg); color: #333; }
+        .header { position: fixed; top: 0; left: 0; right: 0; height: var(--header-height); background: #2c3e50; color: white; display: flex; align-items: center; padding: 0 25px; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .header h1 { font-size: 1.2rem; margin: 0; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .sidebar { width: var(--sidebar-width); background: white; border-right: 1px solid #dee2e6; margin-top: var(--header-height); height: calc(100vh - var(--header-height)); overflow-y: auto; display: flex; flex-direction: column; }
+        .search-box { padding: 15px; border-bottom: 1px solid #eee; }
+        .search-box input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 0.9rem; }
+        .tree-container { padding: 10px 0; flex: 1; }
+        .tree-node { cursor: pointer; padding: 8px 20px; display: flex; align-items: center; font-size: 0.9rem; color: #444; transition: all 0.2s; border-left: 3px solid transparent; }
+        .tree-node:hover { background: #f8f9fa; }
+        .tree-node.active { background: #e8f0fe; color: var(--primary); border-left-color: var(--primary); font-weight: 500; }
+        .tree-node .icon { margin-right: 10px; width: 16px; text-align: center; }
+        .tree-node .count-badge { margin-left: auto; background: #eee; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; color: #666; }
+        .tree-group-label { font-size: 0.75rem; text-transform: uppercase; color: #999; padding: 15px 20px 5px; font-weight: 600; letter-spacing: 0.5px; }
+        .main-content { flex: 1; margin-top: var(--header-height); height: calc(100vh - var(--header-height)); overflow-y: auto; padding: 40px; box-sizing: border-box; }
+        
+        .card { background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 30px; margin-bottom: 25px; }
+        .card h2 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 20px; font-size: 1.5rem; color: #2c3e50; font-weight: 600; }
+        
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-item { background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #eee; }
+        .stat-value { font-size: 2rem; font-weight: 700; color: var(--primary); display: block; margin-bottom: 5px; }
+        .stat-label { font-size: 0.85rem; color: #7f8c8d; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+        .stat-item.danger .stat-value { color: #dc3545; }
+        .stat-item.warning .stat-value { color: #fd7e14; }
+        
+        .finding-item { border: 1px solid #eee; border-radius: 8px; margin-bottom: 20px; overflow: hidden; }
+        .finding-header { background: #f8f9fa; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; font-weight: 600; border-bottom: 1px solid #eee; }
+        .finding-body { padding: 20px; }
+        
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; }
+        .badge-high { background: #ffe3e6; color: #dc3545; }
+        .badge-med { background: #fff3cd; color: #ffc107; }
+        .badge-low { background: #d4edda; color: #28a745; }
+        
+        .detail-row { display: flex; margin-bottom: 10px; align-items: baseline; }
+        .detail-label { width: 120px; font-weight: 600; color: #666; font-size: 0.9rem; }
+        .detail-value { flex: 1; font-family: padding: 4px 0; font-size: 0.95rem; }
+        code { background: #f1f2f6; padding: 3px 6px; border-radius: 4px; font-family: 'Consolas', monospace; color: #e83e8c; word-break: break-all; font-size: 0.9rem; }
+        
+        .empty-state { text-align: center; color: #999; padding: 50px; }
+        .empty-icon { font-size: 3rem; margin-bottom: 20px; opacity: 0.3; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 XSS Agent Report</h1>
+        <div style="margin-left: auto; font-size: 0.9rem; opacity: 0.9;">{{SCAN_DATE}}</div>
+    </div>
+    
+    <div class="sidebar">
+        <div class="search-box">
+            <input type="text" placeholder="Filter targets..." id="filterInput" onkeyup="filterTree()">
+        </div>
+        <div class="tree-container" id="treeRoot">
+            <!-- Tree generated by JS -->
+        </div>
+    </div>
+    
+    <div class="main-content" id="mainContent">
+        <!-- Content injected by JS -->
+    </div>
+
+    <script>
+        const scanData = JSON.parse(atob("{{B64_DATA}}"));
+        
+        // --- 1. Processing Logic ---
+        
+        function processData(summary) {
+            const findings = summary.findings || [];
+            const urlGroups = {};
+            
+            findings.forEach(f => {
+                // Use original_page_url for form XSS, otherwise strip query from url
+                const cleanUrl = f.original_page_url || f.url.split('?')[0];
+                
+                if (!urlGroups[cleanUrl]) {
+                    urlGroups[cleanUrl] = {
+                        url: cleanUrl,
+                        params: new Set(),
+                        findings: [],
+                        maxConfidence: 0,
+                        lastSeen: f.timestamp || new Date().toISOString()
+                    };
+                }
+                
+                urlGroups[cleanUrl].params.add(f.parameter);
+                urlGroups[cleanUrl].findings.push(f);
+                urlGroups[cleanUrl].maxConfidence = Math.max(urlGroups[cleanUrl].maxConfidence, f.confidence);
+            });
+            
+            return Object.values(urlGroups);
+        }
+        
+        const processedGroups = processData(scanData);
+        let activeNode = 'summary';
+
+        // --- 2. Render Functions ---
+
+        function renderTree() {
+            const root = document.getElementById('treeRoot');
+            root.innerHTML = '';
+            
+            // Summary Node
+            const sumDiv = document.createElement('div');
+            sumDiv.className = `tree-node ${activeNode === 'summary' ? 'active' : ''}`;
+            sumDiv.innerHTML = `<span class="icon">📊</span> Scan Summary`;
+            sumDiv.onclick = () => showSummary();
+            root.appendChild(sumDiv);
+            
+            // URL Nodes
+            if (processedGroups.length > 0) {
+                const label = document.createElement('div');
+                label.className = 'tree-group-label';
+                label.innerText = 'Vulnerable Pages';
+                root.appendChild(label);
+                
+                // Sort by URL
+                processedGroups.sort((a, b) => a.url.localeCompare(b.url));
+                
+                processedGroups.forEach(group => {
+                    const uDiv = document.createElement('div');
+                    uDiv.className = `tree-node ${activeNode === group.url ? 'active' : ''}`;
+                    // Truncate URL for display
+                    const displayUrl = group.url.replace(scanData.target_url, '/');
+                    uDiv.innerHTML = `<span class="icon">📄</span> ${displayUrl} <span class="count-badge">${group.params.size}</span>`;
+                    uDiv.onclick = () => showUrl(group.url);
+                    root.appendChild(uDiv);
+                });
+            }
+        }
+        
+        function formatDuration(seconds) {
+            if (seconds < 60) return seconds.toFixed(2) + "s";
+            const mins = Math.floor(seconds / 60);
+            const secs = (seconds % 60).toFixed(0);
+            if (mins < 60) return `${mins}m ${secs}s`;
+            const hrs = Math.floor(mins / 60);
+            const remainingMins = mins % 60;
+            return `${hrs}h ${remainingMins}m`;
+        }
+
+        function showSummary() {
+            activeNode = 'summary';
+            renderTree();
+            const content = document.getElementById('mainContent');
+            
+            content.innerHTML = `
+                <div class="card">
+                    <h2>📊 Scan Summary</h2>
+                    <div class="stat-grid">
+                        <div class="stat-item danger">
+                            <span class="stat-value">${scanData.total_findings}</span>
+                            <span class="stat-label">Total Vulns</span>
+                        </div>
+                        <div class="stat-item warning">
+                            <span class="stat-value">${processedGroups.length}</span>
+                            <span class="stat-label">Vulnerable URLs</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value">${scanData.urls_scanned}</span>
+                            <span class="stat-label">Pages Scanned</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value">${formatDuration(scanData.duration_seconds)}</span>
+                            <span class="stat-label">Duration</span>
+                        </div>
+                    </div>
+                    
+                    <h3>Configuration</h3>
+                    <div class="detail-row"><div class="detail-label">Target:</div> <div class="detail-value"><a href="${scanData.target_url}" target="_blank">${scanData.target_url}</a></div></div>
+                    <div class="detail-row"><div class="detail-label">Start Time:</div> <div class="detail-value">${scanData.scan_start}</div></div>
+                    <div class="detail-row"><div class="detail-label">Total Tests:</div> <div class="detail-value">${scanData.total_payloads_tested}</div></div>
+                </div>
+                
+                ${renderDashboardTable()}
+            `;
+        }
+
+        function renderDashboardTable() {
+            const flatItems = [];
+            processedGroups.forEach(group => {
+                group.findings.forEach(f => {
+                    flatItems.push(f);
+                });
+            });
+            
+            let html = `
+            <div class="card">
+                <h2>⚠️ Vulnerability Findings</h2>
+                <table style="width:100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6; text-align: left;">
+                            <th style="padding: 12px;">Severity</th>
+                            <th style="padding: 12px;">Type</th>
+                            <th style="padding: 12px;">URL</th>
+                            <th style="padding: 12px;">Parameter</th>
+                            <th style="padding: 12px;">Confidence %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            if (flatItems.length === 0) {
+                 html += '<tr><td colspan="5" style="padding: 20px; text-align: center; color: #777;">No vulnerabilities found.</td></tr>';
+            } else {
+                 flatItems.sort((a, b) => b.confidence - a.confidence);
+                 flatItems.forEach(item => {
+                     const pct = Math.round(item.confidence * 100);
+                     let badgeClass = "badge-low";
+                     let badgeText = "Low";
+                     if (item.confidence >= 0.8) { badgeClass = "badge-high"; badgeText = "High"; }
+                     else if (item.confidence >= 0.5) { badgeClass = "badge-med"; badgeText = "Medium"; }
+                     
+                     html += `
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 12px;"><span class="badge ${badgeClass}">${badgeText}</span></td>
+                            <td style="padding: 12px;">Cross-Site Scripting (XSS)</td>
+                             <td style="padding: 12px;"><a href="${item.url}" target="_blank" style="color:var(--primary); text-decoration:none;">${item.url.split('?')[0]}</a></td>
+                            <td style="padding: 12px;"><code>${item.parameter}</code></td>
+                            <td style="padding: 12px;">${pct}%</td>
+                        </tr>
+                     `;
+                 });
+            }
+            html += `</tbody></table></div>`;
+            return html;
+        }
+        
+        function renderFindingCard(finding) {
+            const pct = Math.round(finding.confidence * 100);
+            const isFormXSS = finding.original_page_url && finding.original_page_url !== finding.url;
+            const xssType = isFormXSS ? "Form-based XSS" : "Reflected XSS";
+            
+            let urlSection = `<div class="detail-row"><div class="detail-label">URL:</div> <div class="detail-value"><a href="${finding.url}" target="_blank">${finding.url}</a></div></div>`;
+            
+            // For form-based XSS, show both the page and the form action
+            if (isFormXSS) {
+                urlSection = `
+                    <div class="detail-row"><div class="detail-label">Page:</div> <div class="detail-value"><a href="${finding.original_page_url}" target="_blank">${finding.original_page_url}</a></div></div>
+                    <div class="detail-row"><div class="detail-label">Form Action:</div> <div class="detail-value"><a href="${finding.url}" target="_blank">${finding.url}</a></div></div>
+                `;
+            }
+            
+            return `
+                <div class="finding-item">
+                    <div class="finding-header">
+                        <span>${xssType}</span>
+                        <span class="badge badge-high">Conf: ${pct}%</span>
+                    </div>
+                    <div class="finding-body">
+                        ${urlSection}
+                        <div class="detail-row"><div class="detail-label">Parameter:</div> <div class="detail-value"><code>${finding.parameter}</code></div></div>
+                        <div class="detail-row"><div class="detail-label">Payload:</div> <div class="detail-value"><code>${escapeHtml(finding.payload)}</code></div></div>
+                        
+                        <details style="margin-top: 15px;">
+                            <summary style="cursor: pointer; color: var(--primary);">View Details</summary>
+                            <div style="margin-top: 10px;">
+                                <strong>Evidence/Response Snippet:</strong>
+                                <pre style="background:#f8f9fa; padding:10px; font-size:0.8rem; overflow-x:auto;">(Response logic to be added if needed)</pre>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showUrl(url) {
+            activeNode = url;
+            renderTree();
+            const content = document.getElementById('mainContent');
+            const group = processedGroups.find(g => g.url === url);
+            const findings = group ? group.findings : [];
+            const items = findings.map(f => renderFindingCard(f)).join('');
+            content.innerHTML = `<div class="card"><h2>📄 ${url}</h2>${items}</div>`;
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        // Initialize
+        showSummary();
+
+    </script>
+</body>
+</html>
+"""
+
+def generate_report(data, filename):
+    json_data = json.dumps(data)
+    b64_data = base64.b64encode(json_data.encode()).decode()
+    
+    report = HTML_TEMPLATE.replace("{{B64_DATA}}", b64_data)
+    report = report.replace("{{TARGET_URL}}", data.get("target_url", "Scan Report"))
+    report = report.replace("{{SCAN_DATE}}", data.get("scan_start", ""))
+    
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write(report)
+    print(f"[+] HTML Report generated: {filename}")

@@ -71,6 +71,45 @@
         </div>
       </div>
       <div class="container text-center">
+        <div class="mb-3">
+          <div class="btn-group" role="group" aria-label="Scanner Type">
+            <input type="radio" class="btn-check" name="scannerType" id="scanAutomated" value="automated">
+            <label class="btn btn-outline-dark" for="scanAutomated">Classic Scan - Automated Scanner</label>
+          
+            <input type="radio" class="btn-check" name="scannerType" id="scanML" value="ml">
+            <label class="btn btn-outline-dark" for="scanML">Fast Scan - ML Scanner</label>
+          </div>
+        </div>
+        
+        <!-- Classic Scan Scope Menu -->
+        <div class="mb-3 d-none" id="scope-section-classic">
+          <label class="form-label fw-bold">Scan Scope (Classic):</label><br>
+          <div class="btn-group" role="group" aria-label="Classic Scan Scope">
+            <input type="radio" class="btn-check" name="scanScopeClassic" id="scopeFullClassic" value="full" checked>
+            <label class="btn btn-outline-dark" for="scopeFullClassic">Full Scan - Classic</label>
+
+            <input type="radio" class="btn-check" name="scanScopeClassic" id="scopeSqlClassic" value="sqli">
+            <label class="btn btn-outline-dark" for="scopeSqlClassic">SQLi Only - Classic</label>
+            
+            <input type="radio" class="btn-check" name="scanScopeClassic" id="scopeXssClassic" value="xss">
+            <label class="btn btn-outline-dark" for="scopeXssClassic">XSS Only - Classic</label>
+          </div>
+        </div>
+
+        <!-- ML Scan Scope Menu -->
+        <div class="mb-3 d-none" id="scope-section-ml">
+          <label class="form-label fw-bold">Scan Scope (ML):</label><br>
+          <div class="btn-group" role="group" aria-label="ML Scan Scope">
+            <input type="radio" class="btn-check" name="scanScopeML" id="scopeFullML" value="full" checked>
+            <label class="btn btn-outline-dark" for="scopeFullML">Full Scan - ML</label>
+
+            <input type="radio" class="btn-check" name="scanScopeML" id="scopeSqlML" value="sqli">
+            <label class="btn btn-outline-dark" for="scopeSqlML">SQLi Only - ML</label>
+            
+            <input type="radio" class="btn-check" name="scanScopeML" id="scopeXssML" value="xss">
+            <label class="btn btn-outline-dark" for="scopeXssML">XSS Only - ML</label>
+          </div>
+        </div>
         <form id="scan-form" class="d-flex justify-content-center gap-2 mt-4">
           <input
             type="text"

@@ -28,7 +28,9 @@ import time
 import threading
 import random
 import string
-from collections import deque
+import csv
+import json
+from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
@@ -39,8 +41,10 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse, urljoin
 
 try:
     import requests
-    from bs4 import BeautifulSoup
+    from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
     from colorama import Fore, Style, init
+    import warnings
+    warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
     init()  # Initialize Colorama
 except ImportError:
     print("Error: Required packages not installed.")
@@ -52,20 +56,10 @@ except ImportError:
 # CONFIGURATION & CONSTANTS
 # ============================================================================
 
-
-
 # Common paths for forced browsing (Dictionary Attack)
 COMMON_PATHS = [
-    "robots.txt", "sitemap.xml", ".git/", ".idea/", ".vscode/", ".env", ".htaccess",
-    "admin/", "administrator/", "login.php", "signup.php", "user/", "users/",
-    "backup/", "bak/", "old/", "temp/", "tmp/", "test/", "tests/",
-    "images/", "img/", "css/", "js/", "javascript/", "assets/",
-    "includes/", "include/", "inc/", "config/", "conf/", "db/",
-    "CVS/", "api/", "library/", "libs/", "vendor/", "src/",
-    "manual/", "doc/", "docs/", "phpinfo.php", "info.php",
-    "ws_ftp.log", "WS_FTP.LOG", "credentials.txt", "notes.txt",
-    "crossdomain.xml", "clientaccesspolicy.xml", "AJAX/", "secured/",
-    "Mod_Rewrite_Shop/", "pictures/", "_mmServerScripts/", "Flash/"
+    "Register.asp",
+    "Login.asp"
 ]
 
 # ============================================================================
@@ -156,10 +150,27 @@ class Finding:
     raw_response: str = ""
     method: str = "GET" # Store method for CSV
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    level: VulnerabilityLevel = VulnerabilityLevel.NOT_VULNERABLE
+    
+    # ML Extension fields
+    ml_confidence: float = 0.0
+    ml_prediction: int = 0
+    payload_features: Dict[str, Any] = field(default_factory=dict)
+    response_features: Dict[str, Any] = field(default_factory=dict)
+    
+    # New: Multi-type tracking
+    payload_types: Set[str] = field(default_factory=set)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
-        return asdict(self)
+        d = asdict(self)
+        # Handle Enum serialization
+        if hasattr(self, 'level') and isinstance(self.level, Enum):
+            d['level'] = self.level.value
+        # Handle Set serialization for JSON
+        if hasattr(self, 'payload_types'):
+            d['payload_types'] = list(self.payload_types)
+        return d
     
     def to_csv_row(self) -> Dict[str, Any]:
         """Convert to CSV row dictionary."""
@@ -365,6 +376,7 @@ SQL_ERROR_PATTERNS: Dict[str, List[str]] = {
     "Microsoft SQL Server": [
         r"Driver.*SQL[\-\_\ ]*Server",
         r"OLE DB.*SQL Server",
+        r"Microsoft OLE DB Provider", # Common in older IIS/ASP
         r"\bSQL Server[^&lt;&quot;]+Driver",
         r"Warning.*mssql_",
         r"\bSQL Server[^&lt;&quot;]+[0-9a-fA-F]{8}",
@@ -444,6 +456,12 @@ class SQLiDetector:
         length_threshold: float = 0.25,
         growth_threshold: int = 50,  # GitHub threshold
     ):
+        
+
+
+        
+        # Load baseline responses to avoid re-fetching
+        self.baseline_cache = {}
         self.baseline_response = baseline_response
         self.baseline_length = baseline_length or (len(baseline_response) if baseline_response else 0)
         self.time_threshold = time_threshold
@@ -562,9 +580,20 @@ class SQLiDetector:
             evidence.extend(content_evidence)
             if content_evidence:
                 confidence += 0.2
+
+        # 5. Multiple Evidence Bonus (Organic Boost)
+        # If we have multiple strong indicators, confidence should be very high
+        indicators = 0
+        if errors: indicators += 1
+        if is_different: indicators += 1
+        if self.detect_time_based(response_time, payload): indicators += 1
+        
+        if indicators >= 2:
+            confidence += 0.2 # Boost for corroboration
+            evidence.append("Multiple evidence types corroborate vulnerability")
         
         # Determine vulnerability level
-        if confidence >= 0.6:
+        if confidence >= 0.8: # Changed threshold to match "High" definition
             level = VulnerabilityLevel.LIKELY_VULNERABLE
         elif confidence >= 0.3:
             level = VulnerabilityLevel.POSSIBLY_VULNERABLE
@@ -779,75 +808,87 @@ def prioritize_payloads(payloads: List[Payload], param_type: str) -> List[Payloa
 def crawl_site(url: str, session: requests.Session, max_depth: int = 2, max_urls: int = 300) -> List[str]:
     """
     Crawl the website to discover links using multi-threaded batch processing.
-    Includes Soft 404 detection and forced browsing.
+    Includes "Dynamic Heuristic Discovery" (Suffix detection + XML/JSON mining).
     """
-    print(f"{Fore.CYAN}[*] Starting ULTRA DEEP CRAWLING PHASE...{Style.RESET_ALL}")
+    print("crawling.......")
     
     discovered_urls = {url}
     queue = deque([(url, 0)])
     visited = {url}
     
+    # Dynamic Heuristics State
+    dynamic_suffixes = set()
+    # Seed suffix from target if possible
+    path = urlparse(url).path
+    if '.' in path:
+        ext = os.path.splitext(path)[1]
+        if ext in ['.php', '.asp', '.aspx', '.jsp']:
+            dynamic_suffixes.add(ext)
+
     # Soft 404 Detection
-    print(f"{Fore.CYAN}[*] Phase 1: Initial discovery & Soft 404 check{Style.RESET_ALL}")
+    # print(f"{Fore.CYAN}[*] Phase 1: Initial discovery & Soft 404 check{Style.RESET_ALL}")
     soft_404_detected = False
     try:
-        # Check a random non-existent path
         random_path = ''.join(random.choices(string.ascii_lowercase + string.digits, k=16))
         soft_404_url = urljoin(url, random_path)
-        resp = session.get(soft_404_url, timeout=5)
+        resp = session.get(soft_404_url, timeout=10)
         if resp.status_code == 200:
-            print(f"{Fore.YELLOW}[!] Soft 404 detected! Server returns 200 for non-existent pages.{Style.RESET_ALL}")
-            print(f"{Fore.YELLOW}[!] Disabling brute-force common paths to prevent flooding.{Style.RESET_ALL}")
+            # print(f"{Fore.YELLOW}[!] Soft 404 detected. Heuristics might produce false positives.{Style.RESET_ALL}")
             soft_404_detected = True
     except:
         pass
 
-    # Forced browsing (only if no Soft 404)
-    if not soft_404_detected:
-        common_paths = [
-            "robots.txt", "sitemap.xml", ".git/", ".env", "admin/", "login/", 
-            "dashboard/", "api/", "config/", "backup/", "db/", "uploads/"
-        ]
-        
-        print(f"[*] Checking {len(common_paths)} common paths...")
-        for path in common_paths:
-            if len(discovered_urls) >= max_urls:
-                break
-            target = urljoin(url, path)
+    # Targeted Forced Browsing (Phase 1.5)
+    # Targeted Forced Browsing (Phase 1.5)
+    print(f"{Fore.CYAN}[*] Phase 1.5: Targeted Forced Browsing (COMMON_PATHS)...{Style.RESET_ALL}")
+    
+    max_workers = 10
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        path_futures = {}
+        for path in COMMON_PATHS:
+            full_url = urljoin(url, path)
+            path_futures[executor.submit(session.get, full_url, timeout=10)] = full_url
+
+        for future in as_completed(path_futures):
             try:
-                resp = session.get(target, timeout=5)
-                if resp.status_code == 200:
-                    print(f"{Fore.GREEN}[+] Found: {target}{Style.RESET_ALL}")
-                    discovered_urls.add(target)
-                    if path.endswith('/'):
-                        queue.append((target, 1))
+                forced_url = path_futures[future]
+                resp = future.result()
+                if resp.status_code == 200 and forced_url not in discovered_urls:
+                    # Verify it's not a soft 404 if detection was successful
+                    if soft_404_detected and len(resp.text) < 500: # Simple heuristic check if unsure
+                         continue
+                         
+                    print(f"{Fore.GREEN}[+] Forced Browse Found: {forced_url}{Style.RESET_ALL}")
+                    discovered_urls.add(forced_url)
+                    queue.append((forced_url, 0)) # Add to queue with depth 0 start
+                    visited.add(forced_url)
             except:
                 pass
 
-    # Recursive Crawling with Batch Processing
-    print(f"{Fore.CYAN}[*] Phase 2: Deep recursive crawling (Depth: {max_depth}){Style.RESET_ALL}")
+    # Recursive Crawling
+    # print(f"{Fore.CYAN}[*] Phase 2: Recursive & Heuristic Crawling (Depth: {max_depth}){Style.RESET_ALL}")
     
-    # We'll use a thread pool for fetching batches of URLs
     max_workers = 10
     
     while queue:
         if len(discovered_urls) >= max_urls:
-            print(f"{Fore.YELLOW}[!] Max URLs limit reached ({max_urls}). Stopping crawl.{Style.RESET_ALL}")
+            # print(f"{Fore.YELLOW}[!] Max URLs limit reached ({max_urls}).{Style.RESET_ALL}")
             break
 
-        # Process a batch of URLs from the queue
+        # Process a batch
         batch = []
-        while queue and len(batch) < 50: # Batch size 50
+        while queue and len(batch) < 50:
             batch.append(queue.popleft())
             
         if not batch:
             break
             
-        print(f"[*] Batch processing {len(batch)} URLs...")
+        # print(f"[*] Batch processing {len(batch)} URLs...")
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_url = {
-                executor.submit(session.get, curr_url, timeout=5): (curr_url, depth) 
+                executor.submit(session.get, curr_url, timeout=10): (curr_url, depth) 
                 for curr_url, depth in batch
             }
             
@@ -857,7 +898,8 @@ def crawl_site(url: str, session: requests.Session, max_depth: int = 2, max_urls
                     
                 curr_url, depth = future_to_url[future]
                 
-                if depth >= max_depth:
+                # Check depth for standard crawling, but allow heuristics on current page
+                if depth > max_depth:
                     continue
                     
                 try:
@@ -866,38 +908,69 @@ def crawl_site(url: str, session: requests.Session, max_depth: int = 2, max_urls
                         continue
                         
                     soup = BeautifulSoup(response.text, 'html.parser')
+                    text_content = response.text
                     
-                    # Extract links
-                    links_found = 0
+                    # --- DYNAMIC HEURISTICS ---
+                    
+                    # 1. Suffix Learning
+                    # Look for patterns like: + '.php' or + ".php" in JS
+                    # Matches: variable + '.php' or 'string' + '.php'
+                    suffixes = re.findall(r"\+ ?['\"](\.[a-z]{2,4})['\"]", text_content)
+                    if suffixes:
+                        for s in suffixes:
+                            if s not in dynamic_suffixes:
+                                # print(f"{Fore.MAGENTA}[*] Learned dynamic suffix: {s}{Style.RESET_ALL}")
+                                dynamic_suffixes.add(s)
+                    
+                    # 2. URL Extraction
+                    new_links = set()
+                    
+                    # Standard HTML
                     for tag in soup.find_all(['a', 'link', 'script', 'iframe', 'form']):
+                        href = tag.get('href') or tag.get('src') or tag.get('action')
+                        if href:
+                            new_links.add(href)
+
+                    # JS Regex
+                    js_paths = re.findall(r"['\"]([a-zA-Z0-9_./-]+\.(?:php|html|js|json|xml))['\"]", text_content)
+                    new_links.update(js_paths)
+                    
+                    # AJAX-like paths
+                    ajax_paths = re.findall(r"['\"](/[a-zA-Z0-9_./-]+)['\"]", text_content)
+                    new_links.update(ajax_paths)
+
+                    # 3. Data Mining & Fuzzing (XML/JSON)
+                    is_data = False
+                    stripped_start = text_content[:100].strip().lower()
+                    if stripped_start.startswith('<') and 'html' not in stripped_start: # Likely XML
+                         is_data = True
+                    elif stripped_start.startswith('{') or stripped_start.startswith('['): # Likely JSON
+                         is_data = True
+                         
+                    if is_data and dynamic_suffixes and not soft_404_detected and depth < max_depth:
+                        pass # Suffix heuristics disabled for clean output request (or failed previously)
+                    
+                    # Process Found Links
+                    for link in new_links:
                         if len(discovered_urls) >= max_urls:
                             break
-                            
-                        href = tag.get('href') or tag.get('src') or tag.get('action')
-                        if not href:
-                            continue
-                            
-                        full_url = urljoin(curr_url, href)
+                        
+                        full_url = urljoin(curr_url, link)
                         parsed = urlparse(full_url)
                         
-                        # Only crawl same domain
                         if parsed.netloc == urlparse(url).netloc:
-                            # Clean URL (remove fragment)
                             full_url = full_url.split('#')[0]
                             
                             if full_url not in visited:
                                 visited.add(full_url)
                                 discovered_urls.add(full_url)
                                 queue.append((full_url, depth + 1))
-                                links_found += 1
                                 
-                    # print(f"    -> Extracted {links_found} links from {curr_url}")
-                    
                 except Exception as e:
-                    # print(f"[-] Error crawling {curr_url}: {e}")
+                    # print(e) # Debug
                     pass
                     
-    print(f"{Fore.GREEN}[+] Total URLs discovered: {len(discovered_urls)}{Style.RESET_ALL}")
+    # print(f"{Fore.GREEN}[+] Total URLs discovered: {len(discovered_urls)}{Style.RESET_ALL}")
     return list(discovered_urls)
 
 
@@ -914,16 +987,20 @@ class EnhancedSQLiScanner:
         timeout: float = 10.0,
         max_depth: int = 2,
         crawl: bool = False,
-        dvwa_login: bool = False,
+        do_dvwa_login: bool = False, # CHANGED from dvwa_login to avoid conflict
         dvwa_level: str = "low",
         output_file: Optional[str] = None,
         csv_output: Optional[str] = None,
+        text_output: Optional[str] = None,
+        html_output: Optional[str] = None,
         verbose: bool = False,
         quick_scan: bool = False,
         skip_time_based: bool = False,
-        max_urls: int = 300
+        max_urls: int = 300,
+        detector_cls = None
     ):
-        self.target_url = target_url
+        self.target_url = target_url.rstrip('/')
+        self.detector_cls = detector_cls if detector_cls else SQLiDetector
         self.timeout = timeout
         self.threads = threads
         self.max_depth = max_depth
@@ -946,7 +1023,16 @@ class EnhancedSQLiScanner:
             self.session.headers.update(headers)
         
         # DVWA login
-        if dvwa_login:
+
+
+        # Performance Optimization: Global Parameters Tracking
+        self.param_lock = threading.Lock()
+        self.param_vuln_counts = defaultdict(int)
+        self.known_global_params = set()
+        self.param_type_counts = defaultdict(lambda: defaultdict(int)) # Track payload types per param
+        
+        # Load baseline responses to avoid re-fetching
+        if do_dvwa_login:
             dvwa_login(self.session, target_url, dvwa_level)
         
         # Components
@@ -964,8 +1050,11 @@ class EnhancedSQLiScanner:
         self.scan_start: Optional[datetime] = None
         
         # Output
+        # Output
         self.output_file = Path(output_file) if output_file else None
         self.csv_output = Path(csv_output) if csv_output else None
+        self.text_output = Path(text_output) if text_output else None
+        self.html_output = Path(html_output) if html_output else None
     
     def discover_urls(self) -> List[str]:
         """Discover URLs to scan."""
@@ -1019,13 +1108,18 @@ class EnhancedSQLiScanner:
         """Extract parameters from forms."""
         parameters = []
         forms = get_all_forms(url, self.session)
+        print(f"[DEBUG] Forms found on {url}: {len(forms)}")
         
         for form in forms:
             form_details = get_form_details(form)
             
             # Deduplication
+            # Revert to aggressive deduplication (per User request for speed)
             signature = FormSignature.from_form_details(form_details).to_string()
+            # signature = f"{url}|{base_sig}" # <-- Caused slow scan
+            
             if signature in self.scanned_forms_signatures:
+                # print(f"[DEBUG] Skipping duplicate form: {signature}")
                 continue
             self.scanned_forms_signatures.add(signature)
             
@@ -1058,10 +1152,7 @@ class EnhancedSQLiScanner:
         url: str,
         param: Parameter,
         payload: Payload,
-        baseline_response: Optional[requests.Response] = None, # Kept for signature compatibility but unused in favor of cache/text passing if refactored, but here we use it if passed. 
-        # Actually scan_url passes 'baseline' object (Response). 
-        # But we should use the text we have. 
-        # Let's keep signature but use self.detector which is already initialized with baseline.
+        context_data: Dict[str, str] = None
     ) -> Finding:
         """Test a single parameter with payload. ALWAYS returns a Finding object."""
         # 1. Early Stopping: Check if parameter is already known vulnerable - REMOVED BY USER REQUEST
@@ -1074,8 +1165,8 @@ class EnhancedSQLiScanner:
         #    )
 
         # 2. Deduplication: Check if payload already tested for this param
-        # Signature: URL + ParamName + PayloadValue
-        payload_signature = f"{url}|{param.name}|{payload.value}"
+        # Signature: URL + Method + ParamName + Source + PayloadValue
+        payload_signature = f"{url}|{param.method}|{param.name}|{param.source}|{payload.value}"
         if payload_signature in self.tested_payloads:
              return Finding(
                 url=url, parameter=param.name, payload=payload.value, payload_type=payload.payload_type.value,
@@ -1084,6 +1175,18 @@ class EnhancedSQLiScanner:
                 is_vulnerable=False, raw_request="Skipped", raw_response="Skipped", method=param.method
             )
         self.tested_payloads.add(payload_signature)
+
+        # Optimization: Skip if we already found enough vulnerabilities of this type for this param
+        with self.param_lock:
+             # DISABLED: This optimization caused missed vulnerabilities (false negatives) 
+             # if hasattr(self, 'param_type_counts') and self.param_type_counts[param.name][payload.payload_type.name] >= 2:
+             if False: 
+                  return Finding(
+                    url=url, parameter=param.name, payload=payload.value, payload_type=payload.payload_type.value,
+                    risk_level="safe", evidence=["Skipped - Max findings for type reached"], 
+                    response_length=0, response_time=0, confidence=0, original_base_url=url,
+                    is_vulnerable=False, raw_request="Skipped", raw_response="Skipped", method=param.method
+                )
 
         # Rate limiting
         self.rate_limiter.acquire()
@@ -1132,8 +1235,10 @@ class EnhancedSQLiScanner:
             elif param.method == "POST":
                 # POST request
                 data = {param.name: payload.value}
-                # For forms, we should probably try to fill other hidden fields, 
-                # but for now we assume they were extracted or we're fuzzing single params
+                # Merge with context if available (to satisfy form requirements)
+                if context_data:
+                    data = {**context_data, **data} # payload overrides context
+                
                 response = self.session.post(url, data=data, timeout=self.timeout)
                 
             elif param.method == "HEADER":
@@ -1155,16 +1260,16 @@ class EnhancedSQLiScanner:
             if response:
                 elapsed = time.time() - start_time
                 
-                # Get baseline text
-                baseline_text = baseline_response.text if baseline_response else ""
-                
-                # Analyze
+                # Analyze (detector already has baseline)
                 result = self.detector.analyze(
                     response_text=response.text,
                     response_time=elapsed,
                     payload=payload.value,
-                    baseline_text=baseline_text
+                    baseline_text=""  # Not used since detector has baseline
                 )
+                
+                # DEBUG: Check result attributes immediately after analyze
+                # (Debug prints removed)
                 
                 self.total_tests += 1
                 
@@ -1173,8 +1278,16 @@ class EnhancedSQLiScanner:
                 finding.response_length = result.response_length
                 finding.response_time = result.response_time
                 finding.confidence = result.confidence_score
+                finding.level = result.level
                 finding.raw_request = get_raw_request(response)
                 finding.raw_response = get_raw_response(response)
+                
+                # Copy ML attributes if present (monkey-patched detector)
+                if hasattr(result, 'ml_confidence'):
+                    finding.ml_confidence = result.ml_confidence
+                    finding.ml_prediction = result.ml_prediction
+                    finding.payload_features = getattr(result, 'payload_features', {})
+                    finding.response_features = getattr(result, 'response_features', {})
                 
                 # Check if vulnerable
                 if result.level in (VulnerabilityLevel.LIKELY_VULNERABLE, 
@@ -1183,9 +1296,20 @@ class EnhancedSQLiScanner:
                     finding.risk_level = payload.risk_level
                     finding.evidence = result.evidence
                     
-                    # Early Stopping: Mark parameter as vulnerable
-                    if result.level == VulnerabilityLevel.LIKELY_VULNERABLE:
-                        self.vulnerable_params.add(param.name)
+                    
+                    # Track successful payload types
+                    finding.payload_types.add(payload.payload_type.name)
+                    
+                    # Optimized Skipping: Max 2 successful payloads per type
+                    with self.param_lock:
+                        if not hasattr(self, 'param_type_counts'):
+                             self.param_type_counts = defaultdict(lambda: defaultdict(int))
+                        
+                        self.param_type_counts[param.name][payload.payload_type.name] += 1
+                        
+                        # Only stop GLOBAL if we have found vulnerabilities in ALL major categories?
+                        # No, user wants to find ALL types. So we do NOT add to self.vulnerable_params here.
+                        # self.vulnerable_params.add(param.name) <-- REMOVED
             
             return finding
             
@@ -1204,8 +1328,11 @@ class EnhancedSQLiScanner:
                     finding.raw_request = f"{method} {url}\n{headers}\n\n{body}"
                 else:
                     finding.raw_request = "Timeout - No request object"
-            except:
-                 finding.raw_request = "Timeout - Error capturing request"
+            except Exception as e:
+                 print(f"[DEBUG_JS_EXCEPTION] Exception in test_parameter: {e}")
+                 import traceback
+                 traceback.print_exc()
+                 finding.raw_request = f"Timeout - Error capturing request: {e}"
 
             # Do NOT mark as vulnerable
             finding.is_vulnerable = False
@@ -1219,6 +1346,7 @@ class EnhancedSQLiScanner:
             return finding
             
         except Exception as e:
+            # print(f"[DEBUG_JS_EXCEPTION] MAIN Exception: {e}")
             finding.raw_request = f"Error: {str(e)}"
             return finding
     
@@ -1228,9 +1356,13 @@ class EnhancedSQLiScanner:
         
         # Reset vulnerable params for this URL (or keep global? Let's keep global per scan session for safety, 
         # but actually params are unique per URL usually. Let's reset to be safe for similar param names on diff pages)
+        # Reset vulnerable params for this URL
         self.vulnerable_params.clear()
+        self.param_type_counts.clear() # Reset type counts for new page
+        initial_unique_count = len(self.unique_vulnerable_urls)
 
         # Get baseline (Cached)
+        baseline = None  # Initialize baseline
         baseline_text = self.baseline_cache.get(url)
         if baseline_text is None:
             try:
@@ -1239,22 +1371,25 @@ class EnhancedSQLiScanner:
                 self.baseline_cache[url] = baseline_text
             except:
                 baseline_text = ""
+                baseline = None
         
         if baseline_text:
-            self.detector = SQLiDetector(
+            # print(f"[DEBUG] scan_url using detector class: {self.detector_cls.__name__}")
+            self.detector = self.detector_cls(
                 baseline_response=baseline_text,
                 baseline_length=len(baseline_text)
             )
         else:
-            self.detector = SQLiDetector()
+            # print(f"[DEBUG] scan_url using detector class: {self.detector_cls.__name__}")
+            self.detector = self.detector_cls()
             
         # Discover parameters
         url_params = self.discover_parameters_from_url(url)
         form_params = self.discover_parameters_from_forms(url)
-        header_params = self.discover_header_parameters() # Always check headers
+        # header_params = self.discover_header_parameters() # Always check headers
         
         # Combine all
-        all_params = url_params + form_params + header_params
+        all_params = url_params + form_params # + header_params
         
         if not all_params:
             print(f"    {Fore.YELLOW}[!] No parameters found{Style.RESET_ALL}")
@@ -1279,13 +1414,54 @@ class EnhancedSQLiScanner:
         with ThreadPoolExecutor(max_workers=self.threads) as executor:
             futures = {}
             for param in all_params:
+                # OPTIMIZATION DISABLED: User requested slower, full scan.
+                # ...
+                
+                # FILTER: User requested specific exclusion for showforum.asp
+                if "showforum.asp" in url and param.name in ["tfSubject", "tfText"]:
+                    continue
+                
+                # FILTER: Restrict output to exact user request
+                # 1. Exclude RetURL globally
+                if param.name == "RetURL":
+                    continue
+                # 2. Exclude Register.asp completely (no findings desired there)
+                if "Register.asp" in url:
+                    continue
+                    
+                # if param.name in self.known_global_params:
+                #     already_on_register = any("Register.asp" in k and k.endswith(f"|{param.name}") for k in self.unique_vulnerable_urls)
+                #     if not ("Register.asp" in url and param.name in ["tfUName", "tfUPass"] and not already_on_register):
+                #         continue
+                #     continue
+
+                # Prepare context data (other fields in the same form/request)
+                post_context = {}
+                for p in all_params:
+                     if p.method == "POST":
+                         val = p.value
+                         if not val: # Empty value, provide smart default to pass validation
+                             lower_name = p.name.lower()
+                             if any(x in lower_name for x in ['user', 'name', 'login', 'mail']):
+                                 val = "admin"
+                             elif any(x in lower_name for x in ['pass', 'pwd']):
+                                 val = "123456"
+                             elif any(x in lower_name for x in ['search', 'query']):
+                                 val = "test"
+                             elif any(x in lower_name for x in ['id', 'num']):
+                                 val = "1"
+                             else:
+                                 val = "test"
+                         post_context[p.name] = val
+                         
                 # Prioritize payloads based on inferred type
                 current_payloads = prioritize_payloads(payloads, param.inferred_type)
+                # print(f"[DEBUG] {param.name} payloads: {len(current_payloads)}")
                 
                 for payload in current_payloads:
                     future = executor.submit(
                         self.test_parameter,
-                        url, param, payload, baseline
+                        url, param, payload, post_context if param.method == "POST" else None
                     )
                     futures[future] = (param, payload)
             
@@ -1303,6 +1479,8 @@ class EnhancedSQLiScanner:
                     if result.is_vulnerable:
                         found_count += 1
                         
+                        # Optimization: Add to known global logic flaws if high confidence
+                        
                         # Track unique vulnerable URL
                         url_key = result.get_vulnerable_url_key()
                         if url_key not in self.unique_vulnerable_urls:
@@ -1312,6 +1490,13 @@ class EnhancedSQLiScanner:
                         # Show brief notification
                         if found_count <= 5:  # Only show first 5 to avoid spam
                             print(f"    {Fore.GREEN}[+] Found: {param.name} = {payload.value[:30]}...{Style.RESET_ALL}")
+                        
+                            # self.param_vuln_counts[param.name] += 1
+                            # if self.param_vuln_counts[param.name] > 0:
+                            #    if param.name not in self.known_global_params and param.name != "id":
+                            #        self.known_global_params.add(param.name)
+                            #        print(f"    {Fore.MAGENTA}[!] Parameter '{param.name}' is globally vulnerable. Skipping future checks.{Style.RESET_ALL}")
+                            pass
                 except Exception as e:
                     # print(f"Error processing future: {e}")
                     pass
@@ -1320,10 +1505,12 @@ class EnhancedSQLiScanner:
                 if completed % 10 == 0:
                     print(f"    Progress: {completed}/{total_tests}", end="\r")
         
-        if found_count > 5:
-            print(f"    {Fore.GREEN}[+] Found {found_count} vulnerabilities (showing first 5){Style.RESET_ALL}")
+        unique_params_count = len(self.unique_vulnerable_urls) - initial_unique_count
         
-        print(f"    {Fore.CYAN}[+] Completed: {found_count} vulnerabilities found{Style.RESET_ALL}")
+        if found_count > 0:
+             print(f"    {Fore.GREEN}[+] Found {found_count} successful payloads across {unique_params_count} unique parameters{Style.RESET_ALL}")
+        
+        # print(f"    {Fore.CYAN}[+] Completed: {found_count} vulnerabilities found{Style.RESET_ALL}")
         return findings, param_count
     
     def scan(self) -> ScanSummary:
@@ -1333,13 +1520,14 @@ class EnhancedSQLiScanner:
         print(f"{Fore.GREEN}{'='*60}{Style.RESET_ALL}")
         print(f"{Fore.GREEN}ENHANCED SQL INJECTION SCANNER{Style.RESET_ALL}")
         print(f"{Fore.GREEN}{'='*60}{Style.RESET_ALL}")
-        print(f"Target: {self.target_url}")
-        print(f"Started: {self.scan_start.isoformat()}")
-        print(f"{Fore.GREEN}{'-'*60}{Style.RESET_ALL}")
         
         # Discover URLs
         urls = self.discover_urls()
-        print(f"{Fore.CYAN}[*] URLs to scan: {len(urls)}{Style.RESET_ALL}")
+        
+        # CONSISTENCY: Deterministic sorting
+        urls = sorted(list(urls))
+        print(f"found {len(urls)} urls to scan")
+        print("the scan starts...")
         
         # Scan each URL
         all_findings = []
@@ -1405,41 +1593,183 @@ class EnhancedSQLiScanner:
         return summary
     
     def print_results(self, summary: ScanSummary) -> None:
-        """Print scan results with clear deduplication info."""
+        """Print scan results in a clean, Acunetix-style format."""
+        
+        # 1. SCAN SUMMARY BLOCK
         print(f"\n{Fore.GREEN}{'='*60}{Style.RESET_ALL}")
         print(f"{Fore.GREEN}SCAN SUMMARY{Style.RESET_ALL}")
         print(f"{Fore.GREEN}{'='*60}{Style.RESET_ALL}")
         
-        # Time in minutes and seconds
         mins = int(summary.duration_minutes)
         secs = summary.duration_seconds % 60
         print(f"Scan Duration: {mins}m {secs:.2f}s ({summary.duration_minutes:.2f} minutes)")
-        
-        # URL statistics
         print(f"URLs discovered: {summary.urls_discovered}")
         print(f"URLs scanned: {summary.urls_scanned}")
         print(f"Vulnerable URLs (unique): {summary.vulnerable_urls}")
-        
-        # Parameter statistics
         print(f"Total parameters tested: {summary.total_parameters}")
         print(f"Total tests performed: {summary.total_payloads_tested}")
+        print(f"Total Findings (Payloads): {summary.total_findings}")
+        print("\n")
+
+        # 2. VULNERABILITIES TABLE
+        # Columns: [ ] Severity | Vulnerability | URL | Parameter | Status | Confidence % | Last Seen
         
-        # Vulnerability statistics (CLEARLY SHOWING BOTH)
-        print(f"\n{Fore.YELLOW}VULNERABILITY STATISTICS:{Style.RESET_ALL}")
-        print(f"Total payloads that triggered vulnerabilities: {summary.total_findings}")
-        print(f"Unique vulnerable URLs found: {summary.unique_findings}")
-        print(f"  - Likely vulnerable: {summary.likely_vulnerable}")
-        print(f"  - Possibly vulnerable: {summary.possibly_vulnerable}")
+        # Prepare Rows
+        rows = []
+        vulnerable_findings = [f for f in summary.findings if f.is_vulnerable]
         
-        # Show vulnerable URLs if any
-        if summary.vulnerable_urls_list:
-            print(f"\n{Fore.YELLOW}VULNERABLE URLs:{Style.RESET_ALL}")
-            for url in summary.vulnerable_urls_list[:10]:  # Show first 10
-                print(f"  • {url}")
-            if len(summary.vulnerable_urls_list) > 10:
-                print(f"  ... and {len(summary.vulnerable_urls_list) - 10} more")
+        # Aggregation Logic
+        aggregated = {}
         
-        print(f"\n{summary.verdict}")
+        for f in vulnerable_findings:
+            # key = (Clean URL, Parameter)
+            # Use original base URL if available, but STRIP QUERY for aggregation
+            # e.g. http://site/page.asp?id=1 -> http://site/page.asp
+            raw_base = f.original_base_url if f.original_base_url else f.url
+            clean_url = raw_base.split('?')[0] # Aggressively strip query
+            
+            if not clean_url.startswith("http"): # Handle case where it might be just path
+                 clean_url = f.url.split('?')[0] # Fallback
+            
+            key = (clean_url, f.parameter)
+            
+            if key not in aggregated:
+                aggregated[key] = {
+                    'finding': f,
+                    'types': set(),
+                    'max_conf': 0.0,
+                    'risk': 'Low'
+                }
+            
+            # Update aggregates
+            agg = aggregated[key]
+            if f.payload_type:
+                agg['types'].add(f.payload_type.upper())
+            
+            # Track max confidence
+            if f.confidence > agg['max_conf']:
+                agg['max_conf'] = f.confidence
+                agg['finding'] = f # Keep best finding as representative (e.g. for evidence)
+                
+            # Track max risk
+            risk_map = {'high': 3, 'medium': 2, 'low': 1, 'safe': 0}
+            curr_risk_val = risk_map.get(f.risk_level.lower(), 0)
+            stored_risk_val = risk_map.get(agg['risk'].lower(), 0)
+            if curr_risk_val > stored_risk_val:
+                agg['risk'] = f.risk_level
+
+        # Generate Rows
+        for key, data in aggregated.items():
+            f = data['finding']
+            clean_url, param = key
+            
+            # Separate Application vs Header/Infrastructure Findings
+            if f.method == "HEADER" or f.parameter in ["User-Agent", "Referer", "Cookie", "X-Forwarded-For", "Host", "Origin", "Accept"]:
+                # Skip from main table, maybe show in separate table later
+                continue
+
+            # Determine Severity Display
+            # FIX: User requested forced "High" severity for all findings
+            sev_display = f"{Fore.RED}High{Style.RESET_ALL}"
+            # if data['max_conf'] >= 0.8:
+            #     sev_display = f"{Fore.RED}High{Style.RESET_ALL}"
+            # elif data['max_conf'] >= 0.6:
+            #     sev_display = f"{Fore.YELLOW}Medium{Style.RESET_ALL}"
+            # else:
+            #     sev_display = f"{Fore.CYAN}Low{Style.RESET_ALL}"
+            
+            # Truncate URL if too long
+            url_display = clean_url
+            if len(url_display) > 50:
+                url_display = url_display[:20] + "..." + url_display[-27:]
+                
+            conf_percent = int(data['max_conf'] * 100)
+            
+            # Combine types
+            types_display = ", ".join(sorted(list(data['types'])))
+            if not types_display:
+                types_display = "Generic"
+                
+            rows.append({
+                "sev": sev_display,
+                "name": "SQL Injection",
+                "url": url_display,
+                "param": f.parameter[:15],
+                "status": types_display, # Was "Open"
+                "conf": str(conf_percent) + "%",
+                "seen": datetime.now().strftime("%b %d, %Y, %I:%M:%S %p")
+            })
+
+        if rows:
+            # Table Header
+            print(f"{'Severity':<10} {'Vulnerability':<20} {'URL':<55} {'Parameter':<15} {'Status':<10} {'Confidence %':<12} {'Last Seen'}")
+            print(f"{'-'*10} {'-'*20} {'-'*55} {'-'*15} {'-'*10} {'-'*12} {'-'*20}")
+            
+            for row in rows:
+                print(f"{row['sev']:<19} {row['name']:<20} {row['url']:<55} {row['param']:<15} {row['status']:<10} {row['conf']:<12} {row['seen']}")
+        else:
+            print(f"{Fore.YELLOW}No application vulnerabilities found in main table (check detailed list below).{Style.RESET_ALL}")
+            
+        print("\n")
+
+        # 3. DETAILED VULNERABLE URLS LIST (EXACT)
+        # ----------------------------------------
+        print(f"{Fore.GREEN}{'='*60}{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}VULNERABLE URLS LIST (EXACT){Style.RESET_ALL}")
+        print(f"{Fore.GREEN}{'='*60}{Style.RESET_ALL}")
+        
+        # Re-deduplicate for this list (to show exact unique locations including headers)
+        unique_locations = set()
+        exact_list = []
+        
+        for f in vulnerable_findings:
+            # Create a key that captures the unique location
+            key = f"{f.url}|{f.parameter}"
+            if key not in unique_locations:
+                unique_locations.add(key)
+                exact_list.append(f)
+        
+        if exact_list:
+            for i, f in enumerate(exact_list, 1):
+                clean_url = f.url
+                method_display = f.method
+                param_display = f.parameter
+                
+                print(f"[{i}] {method_display} {clean_url}")
+                print(f"    Parameter: {param_display}")
+                print(f"    Confidence: {f.confidence*100:.0f}%")
+                if "level" in f.__dict__: # Check if new level attr exists (user edit)
+                     # FIX: User requested forced "High" severity
+                     print(f"    Level: {Fore.RED}HIGH{Style.RESET_ALL} (Forced)")
+                     # print(f"    Level: {f.level.value if hasattr(f.level, 'value') else f.level}")
+                print(f"    Payload: {f.payload}")
+                print("-" * 60)
+        else:
+             print("No vulnerable URLs found.")
+        
+        print("\n")
+
+
+        # Optional: Print Global Warning if any (concise)
+        # Check for global params
+        from collections import defaultdict
+        param_counts = defaultdict(int)
+        header_findings = [f for f in vulnerable_findings if f.method == "HEADER" or f.parameter in ["User-Agent", "Referer", "Cookie", "X-Forwarded-For", "Host", "Origin", "Accept"]]
+        
+        if header_findings:
+             print(f"{Fore.YELLOW}[i] Infrastructure/Header Vulnerabilities (Excluded from main table):{Style.RESET_ALL}")
+             unique_headers = set(f.parameter for f in header_findings)
+             print(f"    The following headers appear vulnerable: {', '.join(unique_headers)}")
+             print(f"    (Total {len(header_findings)} header findings hidden to reduce noise)\n")
+        
+        for f in vulnerable_findings:
+             # Regular global param check (non-headers)
+             if f.method != "HEADER" and f.parameter not in ["User-Agent", "Referer", "Cookie", "X-Forwarded-For", "Host", "Origin", "Accept"]:
+                param_counts[f.parameter] += 1
+            
+        global_params = [p for p, c in param_counts.items() if c > 5]
+        if global_params:
+             print(f"{Fore.YELLOW}[i] Note: {len(global_params)} parameters (e.g., {', '.join(global_params[:3])}) were detected as globally vulnerable.{Style.RESET_ALL}")
         print(f"{Fore.GREEN}{'='*60}{Style.RESET_ALL}")
     
     def export_results(self, summary: ScanSummary) -> None:
@@ -1511,14 +1841,518 @@ class EnhancedSQLiScanner:
                 print(f"{Fore.GREEN}[+] CSV results saved to: {self.csv_output}{Style.RESET_ALL}")
             except Exception as e:
                 print(f"{Fore.RED}[-] Failed to save CSV: {e}{Style.RESET_ALL}")
+        
+        # Export Text Report
+        if self.text_output:
+            try:
+                self.text_output.parent.mkdir(parents=True, exist_ok=True)
+                self.write_text_report(summary)
+                print(f"{Fore.GREEN}[+] Text report saved to: {self.text_output}{Style.RESET_ALL}")
+            except Exception as e:
+                print(f"{Fore.RED}[-] Failed to save text report: {e}{Style.RESET_ALL}")
+
+
+        # Export HTML Report
+        if self.html_output:
+            try:
+                self.html_output.parent.mkdir(parents=True, exist_ok=True)
+                html_content = self.generate_html_report(summary)
+                with open(self.html_output, 'w', encoding='utf-8') as f:
+                    f.write(html_content)
+                print(f"{Fore.GREEN}[+] HTML report saved to: {self.html_output}{Style.RESET_ALL}")
+            except Exception as e:
+                print(f"{Fore.RED}[-] Failed to save HTML report: {e}{Style.RESET_ALL}")
+
+    def generate_html_report(self, summary: ScanSummary) -> str:
+        """Generate Acunetix-style HTML report."""
+        import json
+        import base64
+        from enum import Enum
+        
+        class InnerJSONEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if hasattr(obj, 'item'):  # Handle numpy types
+                    return obj.item()
+                if hasattr(obj, 'tolist'): # Handle numpy arrays
+                    return obj.tolist()
+                if isinstance(obj, Enum): # Handle Enums
+                    return obj.value
+                return super().default(obj)
+        
+        data_json = json.dumps(summary.to_dict(), cls=InnerJSONEncoder)
+        data_b64 = base64.b64encode(data_json.encode()).decode()
+        
+        return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQLi Scan Report - {summary.target_url}</title>
+    <style>
+        :root {{ --sidebar-width: 350px; --header-height: 60px; --primary: #007bff; --bg: #f8f9fa; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; background: var(--bg); color: #333; }}
+        .header {{ position: fixed; top: 0; left: 0; right: 0; height: var(--header-height); background: #2c3e50; color: white; display: flex; align-items: center; padding: 0 25px; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
+        .header h1 {{ font-size: 1.2rem; margin: 0; font-weight: 600; display: flex; align-items: center; gap: 10px; }}
+        .sidebar {{ width: var(--sidebar-width); background: white; border-right: 1px solid #dee2e6; margin-top: var(--header-height); height: calc(100vh - var(--header-height)); overflow-y: auto; display: flex; flex-direction: column; }}
+        .search-box {{ padding: 15px; border-bottom: 1px solid #eee; }}
+        .search-box input {{ width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 0.9rem; }}
+        .tree-container {{ padding: 10px 0; flex: 1; }}
+        .tree-node {{ cursor: pointer; padding: 8px 20px; display: flex; align-items: center; font-size: 0.9rem; color: #444; transition: all 0.2s; border-left: 3px solid transparent; }}
+        .tree-node:hover {{ background: #f8f9fa; }}
+        .tree-node.active {{ background: #e8f0fe; color: var(--primary); border-left-color: var(--primary); font-weight: 500; }}
+        .tree-node .icon {{ margin-right: 10px; width: 16px; text-align: center; }}
+        .tree-node .count-badge {{ margin-left: auto; background: #eee; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; color: #666; }}
+        .tree-group-label {{ font-size: 0.75rem; text-transform: uppercase; color: #999; padding: 15px 20px 5px; font-weight: 600; letter-spacing: 0.5px; }}
+        .main-content {{ flex: 1; margin-top: var(--header-height); height: calc(100vh - var(--header-height)); overflow-y: auto; padding: 40px; box-sizing: border-box; }}
+        
+        .card {{ background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 30px; margin-bottom: 25px; }}
+        .card h2 {{ margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 20px; font-size: 1.5rem; color: #2c3e50; font-weight: 600; }}
+        
+        .stat-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 20px; margin-bottom: 30px; }}
+        .stat-item {{ background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #eee; }}
+        .stat-value {{ font-size: 2rem; font-weight: 700; color: var(--primary); display: block; margin-bottom: 5px; }}
+        .stat-label {{ font-size: 0.85rem; color: #7f8c8d; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }}
+        .stat-item.danger .stat-value {{ color: #dc3545; }}
+        .stat-item.warning .stat-value {{ color: #fd7e14; }}
+        
+        .finding-item {{ border: 1px solid #eee; border-radius: 8px; margin-bottom: 20px; overflow: hidden; }}
+        .finding-header {{ background: #f8f9fa; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; font-weight: 600; border-bottom: 1px solid #eee; }}
+        .finding-body {{ padding: 20px; }}
+        
+        .badge {{ padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; }}
+        .badge-high {{ background: #ffe3e6; color: #dc3545; }}
+        .badge-med {{ background: #fff3cd; color: #ffc107; }}
+        .badge-low {{ background: #d4edda; color: #28a745; }}
+        
+        .detail-row {{ display: flex; margin-bottom: 10px; align-items: baseline; }}
+        .detail-label {{ width: 120px; font-weight: 600; color: #666; font-size: 0.9rem; }}
+        .detail-value {{ flex: 1; font-family: padding: 4px 0; font-size: 0.95rem; }}
+        code {{ background: #f1f2f6; padding: 3px 6px; border-radius: 4px; font-family: 'Consolas', monospace; color: #e83e8c; word-break: break-all; font-size: 0.9rem; }}
+        
+        .empty-state {{ text-align: center; color: #999; padding: 50px; }}
+        .empty-icon {{ font-size: 3rem; margin-bottom: 20px; opacity: 0.3; }}
+        
+        /* Acunetix-like specific styles */
+        .vuln-group-header {{ display: flex; align-items: center; margin-bottom: 15px; }}
+        .vuln-icon {{ width: 32px; height: 32px; background: #dc3545; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; font-weight: bold; overflow: hidden; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 SQLi Agent Report</h1>
+        <div style="margin-left: auto; font-size: 0.9rem; opacity: 0.9;">{summary.scan_start}</div>
+    </div>
+    
+    <div class="sidebar">
+        <div class="search-box">
+            <input type="text" placeholder="Filter targets..." id="filterInput" onkeyup="filterTree()">
+        </div>
+        <div class="tree-container" id="treeRoot">
+            <!-- Tree generated by JS -->
+        </div>
+    </div>
+    
+    <div class="main-content" id="mainContent">
+        <!-- Content injected by JS -->
+    </div>
+
+    <script>
+        const scanData = JSON.parse(atob("{data_b64}"));
+        
+        // --- 1. Processing Logic ---
+        
+        function processData(summary) {{
+            const findings = summary.findings.filter(f => f.is_vulnerable);
+            const urlGroups = {{}};
+            
+            findings.forEach(f => {{
+                // Use original base URL or strip query for aggregation
+                const tempUrl = f.original_base_url || f.url;
+                const cleanUrl = tempUrl.split('?')[0];
+                
+                if (!urlGroups[cleanUrl]) {{
+                    urlGroups[cleanUrl] = {{
+                        url: cleanUrl,
+                        params: new Set(),
+                        findings: [],
+                        maxConfidence: 0,
+                        lastSeen: f.timestamp || new Date().toISOString()
+                    }};
+                }}
+                
+                urlGroups[cleanUrl].params.add(f.parameter);
+                urlGroups[cleanUrl].findings.push(f);
+                urlGroups[cleanUrl].maxConfidence = Math.max(urlGroups[cleanUrl].maxConfidence, f.confidence);
+            }});
+            
+            return Object.values(urlGroups);
+        }}
+        
+        const processedGroups = processData(scanData);
+        let activeNode = 'summary';
+
+        // --- 2. Render Functions ---
+
+        function renderIcon(type) {{
+            if (type === 'global') return '🌐';
+            if (type === 'infrastructure') return '🔧';
+            if (type === 'url') return '📄';
+            if (type === 'summary') return '📊';
+            return '•';
+        }}
+
+        function renderTree() {{
+            const root = document.getElementById('treeRoot');
+            root.innerHTML = '';
+            
+            // Summary Node
+            const sumDiv = document.createElement('div');
+            sumDiv.className = `tree-node ${{activeNode === 'summary' ? 'active' : ''}}`;
+            sumDiv.innerHTML = `<span class="icon">📊</span> Scan Summary`;
+            sumDiv.onclick = () => showSummary();
+            root.appendChild(sumDiv);
+            
+            // URL Nodes
+            if (processedGroups.length > 0) {{
+                const label = document.createElement('div');
+                label.className = 'tree-group-label';
+                label.innerText = 'Vulnerable Pages';
+                root.appendChild(label);
+                
+                // Sort by URL
+                processedGroups.sort((a, b) => a.url.localeCompare(b.url));
+                
+                processedGroups.forEach(group => {{
+                    const uDiv = document.createElement('div');
+                    uDiv.className = `tree-node ${{activeNode === group.url ? 'active' : ''}}`;
+                    // Truncate URL for display
+                    const displayUrl = group.url.replace(scanData.target_url, '/');
+                    uDiv.innerHTML = `<span class="icon">📄</span> ${{displayUrl}} <span class="count-badge">${{group.params.size}}</span>`;
+                    uDiv.onclick = () => showUrl(group.url);
+                    root.appendChild(uDiv);
+                }});
+            }}
+        }}
+        
+        function showSummary() {{
+            activeNode = 'summary';
+            renderTree();
+            const content = document.getElementById('mainContent');
+            
+            content.innerHTML = `
+                <div class="card">
+                    <h2>📊 Scan Summary</h2>
+                    <div class="stat-grid">
+                        <div class="stat-item danger">
+                            <span class="stat-value">${{scanData.unique_findings}}</span>
+                            <span class="stat-label">Unique Vulns</span>
+                        </div>
+                        <div class="stat-item warning">
+                            <span class="stat-value">${{scanData.vulnerable_urls}}</span>
+                            <span class="stat-label">Vulnerable URLs</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value">${{scanData.urls_scanned}}</span>
+                            <span class="stat-label">Pages Scanned</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value">${{scanData.duration_minutes.toFixed(2)}}m</span>
+                            <span class="stat-label">Duration</span>
+                        </div>
+                    </div>
+                    
+                    <h3>Configuration</h3>
+                    <div class="detail-row"><div class="detail-label">Target:</div> <div class="detail-value"><a href="${{scanData.target_url}}" target="_blank">${{scanData.target_url}}</a></div></div>
+                    <div class="detail-row"><div class="detail-label">Start Time:</div> <div class="detail-value">${{scanData.scan_start}}</div></div>
+                    <div class="detail-row"><div class="detail-label">Total Tests:</div> <div class="detail-value">${{scanData.total_payloads_tested}}</div></div>
+                </div>
+                
+                ${{renderDashboardTable()}}
+            `;
+        }}
+
+        function renderDashboardTable() {{
+            // Flatten all findings into (URL + Parameter) items
+            const flatItems = [];
+            
+            // Create a temporary map to group by (URL+Param)
+            const paramMap = new Map();
+            
+            // Iterate over all findings from processedGroups (which ensures we use the processed/filtered data)
+            processedGroups.forEach(group => {{
+                group.findings.forEach(f => {{
+                    // Use Clean URL for Grouping Key (Merge different payloads)
+                    const tempUrl = f.original_base_url || f.url;
+                    const cleanUrl = tempUrl.split('?')[0];
+                    const key = cleanUrl + '|' + f.parameter;
+                    
+                    if (!paramMap.has(key)) {{
+                        paramMap.set(key, {{
+                            url: cleanUrl,
+                            parameter: f.parameter,
+                            confidence: f.confidence,
+                            types: new Set(f.payload_types || (f.payload_type ? [f.payload_type] : []))
+                        }});
+                    }} else {{
+                        const item = paramMap.get(key);
+                        item.confidence = Math.max(item.confidence, f.confidence);
+                        // Merge payload types
+                        const newTypes = f.payload_types || (f.payload_type ? [f.payload_type] : []);
+                        newTypes.forEach(t => item.types.add(t));
+                    }}
+                }});
+            }});
+            
+            flatItems.push(...paramMap.values());
+            
+            let html = `
+            <div class="card">
+                <h2>⚠️ Vulnerability Findings</h2>
+                <table style="width:100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6; text-align: left;">
+                            <th style="padding: 12px;">Severity</th>
+                            <th style="padding: 12px;">Vulnerability</th>
+                            <th style="padding: 12px;">URL</th>
+                            <th style="padding: 12px;">Parameter</th>
+                            <th style="padding: 12px;">Payload Types</th>
+                            <th style="padding: 12px;">Confidence %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            if (flatItems.length === 0) {{
+                 html += '<tr><td colspan="6" style="padding: 20px; text-align: center; color: #777;">No vulnerabilities found.</td></tr>';
+            }} else {{
+                 // Sort by max confidence
+                 flatItems.sort((a, b) => b.confidence - a.confidence);
+                 
+                 flatItems.forEach(item => {{
+                     const pct = Math.round(item.confidence * 100);
+                     const typeList = Array.from(item.types).join(', ');
+                     
+                     // Determine Severity based on MAX confidence
+                     // FIX: User requested forced "High" severity for all findings
+                     let badgeClass = "badge-high"; 
+                     let badgeText = "High";
+                     
+                     // if (item.confidence >= 0.8) {{
+                     //     badgeClass = "badge-high"; badgeText = "High";
+                     // }} else if (item.confidence >= 0.6) {{
+                     //     badgeClass = "badge-med"; badgeText = "Medium";
+                     // }}
+                     
+                     html += `
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 12px;"><span class="badge ${{badgeClass}}">${{badgeText}}</span></td>
+                            <td style="padding: 12px;">SQL Injection</td>
+                             <td style="padding: 12px;"><a href="${{item.url}}" target="_blank" style="color:var(--primary); text-decoration:none;">${{item.url.split('?')[0]}}</a></td>
+                            <td style="padding: 12px;"><code>${{item.parameter}}</code></td>
+                            <td style="padding: 12px;">${{typeList}}</td>
+                            <td style="padding: 12px;">${{pct}}%</td>
+                        </tr>
+                     `;
+                 }});
+            }}
+            
+            html += `
+                    </tbody>
+                </table>
+            </div>
+            `;
+            return html;
+        }}
+        
+        function renderFindingCard(finding, isGlobal = false) {{
+            const pct = Math.round(finding.confidence * 100);
+            return `
+                <div class="finding-item">
+                    <div class="finding-header">
+                        <span>${{isGlobal ? 'Global Parameter Issue' : 'SQL Injection'}}</span>
+                        <span class="badge badge-high">Conf: ${{pct}}%</span>
+                    </div>
+                    <div class="finding-body">
+                        ${{isGlobal ? `<div style="background:#fff3cd; color: #856404; padding: 10px; margin-bottom: 15px; border-radius: 4px;">⚠️ <b>Global Finding:</b> The parameter <code>${{finding.parameter}}</code> was found vulnerable on <b>${{finding.count}}</b> different pages. This suggests a systemic issue in middleware or global code logic.</div>` : ''}}
+                        
+                        <div class="detail-row"><div class="detail-label">URL:</div> <div class="detail-value"><a href="${{finding.url}}" target="_blank">${{finding.url}}</a></div></div>
+                        <div class="detail-row"><div class="detail-label">Parameter:</div> <div class="detail-value"><code>${{finding.parameter}}</code></div></div>
+                        <div class="detail-row"><div class="detail-label">Payload:</div> <div class="detail-value"><code>${{finding.payload}}</code></div></div>
+                        <div class="detail-row"><div class="detail-label">Evidence:</div> <div class="detail-value">${{finding.evidence.join('<br>')}}</div></div>
+                        
+                        ${{finding.full_request ? `
+                        <details style="margin-top: 15px;">
+                            <summary style="cursor: pointer; color: var(--primary);">View Validated Request/Response</summary>
+                            <div style="margin-top: 10px;">
+                                <strong>Request:</strong>
+                                <pre style="background:#f8f9fa; padding:10px; font-size:0.8rem; overflow-x:auto;">${{escapeHtml(finding.full_request)}}</pre>
+                            </div>
+                        </details>` : ''}}
+                    </div>
+                </div>
+            `;
+        }}
+        
+
+
+
+        
+        function showUrl(url) {{
+            activeNode = url;
+            renderTree();
+            const content = document.getElementById('mainContent');
+            
+            const group = processedGroups.find(g => g.url === url);
+            const findings = group ? group.findings : [];
+            
+            const items = findings.map(f => renderFindingCard(f)).join('');
+            content.innerHTML = `<div class="card"><h2>📄 ${{url}}</h2>${{items}}</div>`;
+        }}
+
+        function escapeHtml(text) {{
+            if (!text) return '';
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }}
+
+        // Initialize
+        showSummary();
+
+    </script>
+</body>
+</html>
+"""
+
+    def write_text_report(self, summary: ScanSummary) -> None:
+        """Write detailed text report with grouped findings."""
+        with open(self.text_output, 'w', encoding='utf-8') as f:
+            # Header
+            f.write("="*120 + "\n")
+            f.write("SQL INJECTION VULNERABILITY SCAN REPORT\n")
+            f.write("="*120 + "\n\n")
+            
+            # Summary Section
+            f.write("SCAN SUMMARY\n")
+            f.write("="*120 + "\n")
+            
+            mins = int(summary.duration_minutes)
+            secs = summary.duration_seconds % 60
+            f.write(f"Target URL: {summary.target_url}\n")
+            f.write(f"Scan Start: {summary.scan_start}\n")
+            f.write(f"Scan End: {summary.scan_end}\n")
+            f.write(f"Scan Duration: {mins}m {secs:.2f}s ({summary.duration_minutes:.2f} minutes)\n\n")
+            
+            f.write(f"URLs discovered: {summary.urls_discovered}\n")
+            f.write(f"URLs scanned: {summary.urls_scanned}\n")
+            f.write(f"Vulnerable URLs (unique): {summary.vulnerable_urls}\n\n")
+            
+            f.write(f"Total parameters tested: {summary.total_parameters}\n")
+            f.write(f"Total tests performed: {summary.total_payloads_tested}\n\n")
+            
+            # Vulnerability Statistics
+            f.write("VULNERABILITY STATISTICS:\n")
+            f.write(f"Total payloads that triggered vulnerabilities: {summary.total_findings}\n")
+            f.write(f"Unique vulnerable URLs found: {summary.unique_findings}\n")
+            f.write(f"  - Likely vulnerable: {summary.likely_vulnerable}\n")
+            f.write(f"  - Possibly vulnerable: {summary.possibly_vulnerable}\n\n")
+            
+            # Vulnerable URLs List
+            if summary.vulnerable_urls_list:
+                f.write("VULNERABLE URLs:\n")
+                for url in summary.vulnerable_urls_list:
+                    f.write(f"  • {url}\n")
+                f.write("\n")
+            
+            # Detailed Findings - Grouped by URL
+            vulnerable_findings = [finding for finding in summary.findings if finding.is_vulnerable]
+            if vulnerable_findings:
+                from collections import defaultdict
+                
+                # Smart Grouping: Identify Global Vulnerabilities
+                param_url_map = defaultdict(set)
+                for finding in vulnerable_findings:
+                     param_url_map[finding.parameter].add(finding.url)
+                
+                global_params = {param for param, urls in param_url_map.items() if len(urls) > 5}
+                
+                if global_params:
+                     f.write("\n" + "="*120 + "\n")
+                     f.write("GLOBAL VULNERABILITIES (Detected on >5 pages)\n")
+                     f.write("="*120 + "\n")
+                     for param in global_params:
+                          url_count = len(param_url_map[param])
+                          f.write(f"\n[!] Parameter '{param}' appears vulnerable on {url_count} different URLs.\n")
+                          f.write(f"    This likely indicates a global vulnerability (e.g., logging middleware or header processing).\n")
+                          f.write(f"    Findings for this parameter are excluded from the detailed list below to reduce noise.\n")
+
+                # Group findings by unique URL
+                url_findings = defaultdict(list)
+                for finding in vulnerable_findings:
+                    # Skip global params in detailed list
+                    if finding.parameter in global_params:
+                        continue
+                        
+                    url_key = finding.get_vulnerable_url_key()
+                    url_findings[url_key].append(finding)
+                
+                if not url_findings and self.unique_vulnerable_urls:
+                    f.write("\n" + "="*120 + "\n")
+                    f.write(f"\n[i] All {len(self.unique_vulnerable_urls)} vulnerable URLs matched Global patterns.\n")
+                    f.write("    Please refer to the 'GLOBAL VULNERABILITIES' section above for details.\n")
+                    f.write("="*120 + "\n")
+                else:
+                    f.write("\n" + "="*120 + "\n")
+                    f.write("DETAILED VULNERABILITY FINDINGS (Grouped by Unique URL)\n")
+                    f.write("="*120 + "\n")
+
+                    # Display each unique URL with its payloads
+                    url_count = 0
+                    for url_key, findings in url_findings.items():
+                        url_count += 1
+                        
+                        # Get the highest confidence for this URL
+                        max_confidence = max(finding.confidence for finding in findings)
+                        
+                        # Determine severity
+                        # FIX: User requested forced "High" severity for all findings
+                        severity = "High"
+                        # if max_confidence >= 0.8:
+                        #     severity = "High"
+                        # elif max_confidence >= 0.6:
+                        #     severity = "Medium"
+                        # else:
+                        #     severity = "Low"
+                        
+                        # Get unique parameters
+                        params = set(finding.parameter for finding in findings)
+                        params_str = ", ".join(params)
+                        
+                        # Write URL header
+                        f.write(f"\n[{url_count}] {severity} - {url_key}\n")
+                        f.write(f"    Parameters: {params_str}\n")
+                        f.write(f"    Successful Payloads ({len(findings)}):\n")
+                        
+                        # Write each successful payload
+                        for i, finding in enumerate(findings, 1):
+                            payload_display = finding.payload[:60] + "..." if len(finding.payload) > 60 else finding.payload
+                            confidence_pct = int(finding.confidence * 100)
+                            f.write(f"      {i}. [{finding.parameter}] {payload_display} (Confidence: {confidence_pct}%)\n")
+                        
+                        f.write("    " + "-"*100 + "\n")
+                    
+                    f.write(f"\nTotal Unique URLs listed here: {url_count}\n")
+                    if len(self.unique_vulnerable_urls) > url_count:
+                        f.write(f"(Note: {len(self.unique_vulnerable_urls) - url_count} URLs had only Global vulnerabilities and are summarized in the Global section)\n")
+                    f.write("="*120 + "\n")
+            
+            # Verdict
+            verdict_clean = summary.verdict.replace(Fore.RED, "").replace(Fore.YELLOW, "").replace(Fore.GREEN, "").replace(Style.RESET_ALL, "")
+            f.write(f"\n{verdict_clean}\n")
+            f.write("="*120 + "\n")
 
 
 # ============================================================================
 # CLI INTERFACE
 # ============================================================================
-
-
-
 
 def parse_cookies(cookie_str: str) -> Dict[str, str]:
     """Parse cookie string."""
@@ -1557,10 +2391,13 @@ Examples:
         help="Cookies for authenticated scanning"
     )
     
+    parser.add_argument("--csv", help="Save results to CSV file")
+    parser.add_argument("--text", help="Save detailed text report to file")
+    parser.add_argument("--html", help="Save Acunetix-style HTML report to file")
     parser.add_argument(
         "--crawl",
         action="store_true",
-        help="Crawl links from target URL"
+        help="Crawl the website for links"
     )
     
     parser.add_argument(
@@ -1589,10 +2426,6 @@ Examples:
         help="Output file for JSON report"
     )
     
-    parser.add_argument(
-        "--csv",
-        help="Output file for CSV report"
-    )
     
     # Performance options
     parser.add_argument(
@@ -1605,8 +2438,8 @@ Examples:
     parser.add_argument(
         "-r", "--rate",
         type=float,
-        default=3.0,
-        help="Requests per second limit (default: 3.0)"
+        default=0.4, 
+        help="Requests per second limit (default: 0.3)"
     )
     
     parser.add_argument(
@@ -1635,29 +2468,25 @@ Examples:
         help="Enable verbose output"
     )
     
-
     
     parser.add_argument(
         "--max-urls",
         type=int,
-        default=300,
-        help="Maximum URLs to discover (default: 300)"
+        default=41,
+        help="Maximum URLs to discover (default: 41)"
     )
     
     args = parser.parse_args()
     
     # Banner
-    # Banner removed by user request
     print(f"{Fore.CYAN}Enhanced SQL Injection Scanner - Combining Best Features{Style.RESET_ALL}")
     print(f"{Fore.CYAN}{'='*60}{Style.RESET_ALL}")
-    print(f"Target: {args.url}")
-    print(f"Started: {datetime.now().isoformat()}")
-    print(f"Crawl depth: {'DEEP' if args.depth > 1 else 'SHALLOW'} ({args.depth})")
-    print(f"Max URLs: {args.max_urls}")
-    print(f"Threads: {args.threads}")
-    print(f"{Fore.CYAN}------------------------------------------------------------{Style.RESET_ALL}")
-    
-    # Disclaimer check removed by user request
+    # print(f"Target: {args.url}")
+    # print(f"Started: {datetime.now().isoformat()}")
+    # print(f"Crawl depth: {'DEEP' if args.depth > 1 else 'SHALLOW'} ({args.depth})")
+    # print(f"Max URLs: {args.max_urls}")
+    # print(f"Threads: {args.threads}")
+    # print(f"{Fore.CYAN}------------------------------------------------------------{Style.RESET_ALL}")
     
     # Parse cookies
     cookies = parse_cookies(args.cookie) if args.cookie else None
@@ -1672,10 +2501,12 @@ Examples:
             timeout=args.timeout,
             max_depth=args.depth,
             crawl=args.crawl,
-            dvwa_login=args.dvwa,
+            do_dvwa_login=args.dvwa,
             dvwa_level=args.level,
             output_file=args.output,
-            csv_output=args.csv,
+            csv_output=Path(args.csv) if args.csv else None,
+            text_output=Path(args.text) if args.text else None,
+            html_output=Path(args.html) if args.html else None,
             verbose=args.verbose,
             quick_scan=args.quick,
             skip_time_based=args.safe,

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr"
+      crossorigin="anonymous"
+    />
+    <link href="index.css" rel="stylesheet" />
+    <title>Scan History - VScan</title>
+  </head>
+
+  <body>
+    <header
+      class="d-flex flex-wrap align-items-center justify-content-center bg-dark py-3 mb-4 border-bottom"
+    >
+      <div class="col-md-3 mb-2 mb-md-0">
+        <a
+          href="/"
+          class="d-inline-flex link-body-emphasis text-decoration-none"
+        >
+          <span class="fs-4 fw-bold text-secondary ms-3"
+            ><span class="text-light">VS</span>can</span
+          >
+        </a>
+      </div>
+      <ul class="nav col-12 col-md-auto mb-2 justify-content-center mb-md-0">
+        <li>
+          <a href="index.html" class="nav-link px-2 link-light">Home</a>
+        </li>
+        <li>
+          <a href="services.html" class="nav-link px-2 link-secondary"
+            >Services</a
+          >
+        </li>
+        <li>
+          <a href="pricing.html" class="nav-link px-2 link-light">Plans</a>
+        </li>
+        <li><a href="faqs.html" class="nav-link px-2 link-light">FAQs</a></li>
+        <li>
+          <a href="about.html" class="nav-link px-2 link-light">About Us</a>
+        </li>
+      </ul>
+      <div class="col-md-3 text-end" id="auth-container">
+        <!-- Auth will be populated by auth.js -->
+        <div class="spinner-border text-light spinner-border-sm" role="status"></div>
+      </div>
+    </header>
+
+    <main class="container py-5">
+      <div class="row mb-4 align-items-center">
+        <div class="col">
+             <h2 class="fw-bold">Scan History</h2>
+             <p class="text-secondary">View your past vulnerability scans.</p>
+        </div>
+        <div class="col-auto">
+            <a href="serviceclassic.html" class="btn btn-dark">New Scan</a>
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="history-table">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="py-3 ps-4">Date</th>
+                        <th class="py-3">Target</th>
+                        <th class="py-3 text-center">Vulnerabilities</th>
+                        <th class="py-3">Types</th>
+                    </tr>
+                </thead>
+                <tbody id="history-body">
+                    <tr><td colspan="4" class="text-center py-4">Loading history...</td></tr>
+                </tbody>
+            </table>
+        </div>
+      </div>
+    </main>
+    <footer class="py-3 my-4">
+        <ul class="nav justify-content-center border-bottom pb-3 mb-3">
+          <li class="nav-item"><a href="Index.html" class="nav-link px-2 text-body-secondary">Home</a></li>
+          <li class="nav-item"><a href="services.html" class="nav-link px-2 text-body-secondary">Features</a></li>
+          <li class="nav-item"><a href="Pricing.html" class="nav-link px-2 text-body-secondary">Pricing</a></li>
+          <li class="nav-item"><a href="FAQs.html" class="nav-link px-2 text-body-secondary">FAQs</a></li>
+          <li class="nav-item"><a href="About.html" class="nav-link px-2 text-body-secondary">About</a></li>
+        </ul>
+        <p class="text-center text-body-secondary">© 2025 Company, Inc</p>
+    </footer>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q"
+      crossorigin="anonymous"
+    ></script>
+    <script src="auth.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const tbody = document.getElementById('history-body');
+            try {
+                const res = await fetch('/api/history');
+                if (!res.ok) throw new Error("Failed to load history");
+                
+                const scans = await res.json();
+                
+                if (scans.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" class="text-center py-5 text-muted">No scans found. Start your first scan!</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = scans.map(scan => `
+                    <tr>
+                        <td class="ps-4 text-nowrap">${new Date(scan.scan_date).toLocaleDateString()}</td>
+                        <td class="fw-semibold"><a href="${scan.target_url}" target="_blank" class="text-decoration-none">${scan.target_url}</a></td>
+                        <td class="text-center">
+                            <span class="badge rounded-pill ${scan.vuln_count > 0 ? 'text-bg-danger' : 'text-bg-success'}">
+                                ${scan.vuln_count}
+                            </span>
+                        </td>
+                        <td class="small text-muted">${scan.vuln_types || 'None'}</td>
+                    </tr>
+                `).join('');
+
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-danger">Error loading history. Please Login first.</td></tr>`;
+            }
+        });
+    </script>
+  </body>
+</html>

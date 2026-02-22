@@ -181,9 +181,9 @@
             <p class="col-lg-10 fs-4">
               Use the scanner to manage scans, view reports, and monitor your
               web application's security status.
-              <!-- Adjusted text slightly -->
             </p>
-          </div>
+          </div> 
+          
           <div class="col-lg-2"></div>
           <div class="col-lg-3 d-flex justify-content-end align-items-center">
             <button
@@ -195,7 +195,54 @@
             </button>
           </div>
         </div>
+        <div class="mt-4 pt-4 pb-5 border-bottom">
+          <h5 class="fw-bold mb-3">Recent Scans</h5>
+          <div id="recent-scans-list" class="list-group mb-3">
+            <div class="text-muted small">Loading recent scans...</div>
+          </div>
+          <a href="history.html" class="icon-link text-decoration-none fw-semibold">
+            View Full History <i class="bi bi-arrow-right"></i>
+          </a>
+        </div>
+
       </div>
+      
+      <script>
+      // Dashboard Logic for Recent Scans
+      document.addEventListener('DOMContentLoaded', async () => {
+          const container = document.getElementById('recent-scans-list');
+          if(!container) return; // Only run if element exists (logged in block)
+
+          // We wait a moment for auth check, or just try fetching
+          // Ideally fetch behaves safely if 401
+          try {
+              const res = await fetch('/api/history');
+              if(res.ok) {
+                  const scans = await res.json();
+                  const recent = scans.slice(0, 3); // Top 3
+                  
+                  if (recent.length === 0) {
+                      container.innerHTML = '<div class="text-muted small fst-italic">No scans yet.</div>';
+                  } else {
+                      container.innerHTML = recent.map(s => `
+                        <a href="#" class="list-group-item list-group-item-action d-flex gap-3 py-3" aria-current="true">
+                            <div class="d-flex gap-2 w-100 justify-content-between">
+                            <div>
+                                <h6 class="mb-0">${s.target_url}</h6>
+                                <p class="mb-0 opacity-75 small">${new Date(s.scan_date).toLocaleDateString()}</p>
+                            </div>
+                            <small class="opacity-50 text-nowrap"><span class="badge ${s.vuln_count > 0 ? 'text-bg-danger' : 'text-bg-success'} rounded-pill">${s.vuln_count} Issues</span></small>
+                            </div>
+                        </a>
+                      `).join('');
+                  }
+              }
+          } catch(e) {
+              // diverse errors, maybe not logged in
+              console.log("Could not load recent scans", e);
+          }
+      });
+      </script>
 
       <div class="container px-4 py-5" id="how-it-works">
         <h2 class="pb-2 text-center fw-bold">How VScan Works</h2>
